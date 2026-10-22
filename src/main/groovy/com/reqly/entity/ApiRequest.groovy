@@ -45,6 +45,9 @@ class ApiRequest {
     @Column(columnDefinition = "TEXT", name = "pre_request_script")
     String preRequestScript
 
+    @Column(columnDefinition = "TEXT", name = "post_response_script")
+    String postResponseScript
+
     /** JSON: {timeoutMs, insecure, followRedirects} */
     @Column(columnDefinition = "TEXT")
     String settings

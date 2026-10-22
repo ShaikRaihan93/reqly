@@ -115,6 +115,7 @@ class ReqlyService {
         req.authType = dto.authType
         req.testScript = dto.testScript
         req.preRequestScript = dto.preRequestScript
+        req.postResponseScript = dto.postResponseScript
 
         try {
             if (dto.headers != null) req.headers = objectMapper.writeValueAsString(dto.headers)
@@ -193,7 +194,7 @@ class ReqlyService {
         new ApiRequest(
             name: name, method: src.method, url: src.url, headers: src.headers, params: src.params,
             body: src.body, bodyType: src.bodyType, authType: src.authType, authConfig: src.authConfig,
-            testScript: src.testScript, preRequestScript: src.preRequestScript, disabledItems: src.disabledItems, settings: src.settings,
+            testScript: src.testScript, preRequestScript: src.preRequestScript, postResponseScript: src.postResponseScript, disabledItems: src.disabledItems, settings: src.settings,
             collection: target, environment: src.environment, sortOrder: src.sortOrder
         )
     }
@@ -343,6 +344,7 @@ class ReqlyService {
             authType: req.authType,
             testScript: req.testScript,
             preRequestScript: req.preRequestScript,
+            postResponseScript: req.postResponseScript,
             collectionId: req.collection?.id,
             environmentId: req.environment?.id
         )

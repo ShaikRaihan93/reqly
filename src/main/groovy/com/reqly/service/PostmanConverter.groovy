@@ -135,23 +135,30 @@ class PostmanConverter {
         }
 
         req.testScript = importTests(item.event as List)
+        // Postman JS scripts run as-is in Reqly's script engine (pm + console)
+        req.preRequestScript = scriptOf(item.event as List, "prerequest")
+        req.postResponseScript = scriptOf(item.event as List, "test")
         req.headers = json(headers)
         req.params = json(params)
         req.disabledItems = json([headers: disabledHeaders, params: disabledParams])
         req
     }
 
+    private static List<String> execLines(List events, String listen) {
+        def exec = events?.find { it.listen == listen }?.script?.exec
+        if (!exec) return []
+        (exec instanceof List ? exec : [exec]).collectMany { it.toString().readLines() }
+    }
+
+    /** Reqly line assertions are carried in Postman scripts as `// reqly:` comments. */
     private static String importTests(List events) {
-        def exec = events?.find { it.listen == "test" }?.script?.exec
-        if (!exec) return null
-        def lines = (exec instanceof List ? exec : [exec]).collectMany { it.toString().readLines() }
-        def tests = []
-        lines.each { line ->
-            if (line.startsWith(REQLY_PREFIX)) tests << line.substring(REQLY_PREFIX.length())
-            def m = line =~ /pm\.response\.to\.have\.status\((\d+)\)/
-            if (m.find()) tests << "status == ${m.group(1)}"
-        }
-        tests ? tests.unique().join("\n") : null
+        def tests = execLines(events, "test").findAll { it.startsWith(REQLY_PREFIX) }.collect { it.substring(REQLY_PREFIX.length()) }
+        tests ? tests.join("\n") : null
+    }
+
+    private static String scriptOf(List events, String listen) {
+        def code = execLines(events, listen).findAll { !it.startsWith(REQLY_PREFIX) }.join("\n").trim()
+        code ?: null
     }
 
     // --- Export ---
@@ -195,10 +202,14 @@ class PostmanConverter {
         }
 
         def item = [name: req.name, request: request]
-        if (req.testScript?.trim()) {
-            def exec = req.testScript.readLines().findAll { it.trim() }.collect { REQLY_PREFIX + it.trim() }
-            item.event = [[listen: "test", script: [type: "text/javascript", exec: exec]]]
+        def events = []
+        if (req.preRequestScript?.trim()) {
+            events << [listen: "prerequest", script: [type: "text/javascript", exec: req.preRequestScript.readLines()]]
         }
+        def testExec = (req.testScript?.readLines()?.findAll { it.trim() }?.collect { REQLY_PREFIX + it.trim() } ?: []) +
+                (req.postResponseScript?.trim() ? req.postResponseScript.readLines() : [])
+        if (testExec) events << [listen: "test", script: [type: "text/javascript", exec: testExec]]
+        if (events) item.event = events
         item
     }
 

@@ -63,3 +63,11 @@ dependencies {
 tasks.named('test') {
 	useJUnitPlatform()
 }
+
+// During `./gradlew bootRun`, serve the UI straight from src/ so HTML/CSS/JS edits show up on a page reload
+tasks.named('bootRun') {
+	systemProperty 'spring.web.resources.static-locations', "file:${projectDir}/src/main/resources/static/,classpath:/static/"
+	systemProperty 'spring.web.resources.cache.period', '0'
+	systemProperty 'spring.thymeleaf.prefix', "file:${projectDir}/src/main/resources/templates/"
+	systemProperty 'spring.thymeleaf.cache', 'false'
+}

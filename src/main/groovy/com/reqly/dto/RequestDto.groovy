@@ -16,7 +16,10 @@ class RequestDto {
     String authType
     Map<String, String> authConfig
     String testScript
+    /** JavaScript run in the browser before sending (Postman-style, with pm and console) */
     String preRequestScript
+    /** JavaScript run in the browser after the response arrives */
+    String postResponseScript
     /** Per-request options: timeoutMs, insecure (ignore SSL errors), followRedirects */
     Map<String, Object> settings
     Long collectionId

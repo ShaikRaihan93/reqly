@@ -603,3 +603,14 @@
 :root[data-theme="scifi"] .switch input:checked + span { background: linear-gradient(90deg, #00b3ff, #00f0ff); box-shadow: 0 0 12px rgba(0, 240, 255, 0.6); }
 :root[data-theme="scifi"] .snippet-code { background: rgba(2, 8, 20, 0.75); border-color: var(--border-strong); color: #bff8ff; }
 :root[data-theme="scifi"] .fd-type { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2300f0ff' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); }
+
+/* Console */
+:root[data-theme="scifi"] .console { background: rgba(4, 9, 22, 0.92); border-top: 1px solid var(--accent); box-shadow: 0 -8px 30px -12px rgba(0, 240, 255, 0.5); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+:root[data-theme="scifi"] .console.active { animation: sf-console-in .25s ease-out; }
+@keyframes sf-console-in { from { transform: translateY(30px); opacity: 0; } to { transform: none; opacity: 1; } }
+:root[data-theme="scifi"] .console-title { font-family: var(--display); letter-spacing: 2px; text-transform: uppercase; font-size: 11px; color: var(--accent); text-shadow: 0 0 8px rgba(0, 240, 255, 0.6); }
+:root[data-theme="scifi"] .c-row { border-bottom-color: rgba(0, 240, 255, 0.07); animation: sf-row-in .2s ease-out; }
+:root[data-theme="scifi"] .c-msg { color: #c8f7ff; }
+:root[data-theme="scifi"] .c-time { color: rgba(0, 240, 255, 0.55); }
+:root[data-theme="scifi"] .c-badge { background: var(--magenta); color: #fff; box-shadow: 0 0 8px var(--magenta); }
+:root[data-theme="scifi"] .c-details pre { background: rgba(2, 8, 20, 0.8); border-color: var(--border-strong); }

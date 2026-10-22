@@ -421,6 +421,8 @@ function buildRequestDto() {
         authType: auth.type,
         authConfig: auth.config,
         testScript: $('testEditor').value || null,
+        preRequestScript: $('preScriptEditor').value || null,
+        postResponseScript: $('postScriptEditor').value || null,
         collectionId: tab?.collectionId || null,
     };
 }
@@ -473,6 +475,8 @@ function loadRequestToUI(dto) {
     $('authTypeSelect').value = dto.authType || '';
     renderAuthFields(dto.authType, dto.authConfig || {});
     $('testEditor').value = dto.testScript || '';
+    $('preScriptEditor').value = dto.preRequestScript || '';
+    $('postScriptEditor').value = dto.postResponseScript || '';
     updateIndicators();
 }
 
@@ -496,10 +500,38 @@ function updateIndicators() {
         : bt !== 'none' && $('bodyEditor').value.trim() !== '';
     const st = getSettings();
     $('markSettings').style.display = st ? '' : 'none';
+    const pre = $('preScriptEditor').value.trim(), post = $('postScriptEditor').value.trim();
+    $('markScripts').style.display = pre || post ? '' : 'none';
+    $('markPre').style.display = pre ? '' : 'none';
+    $('markPost').style.display = post ? '' : 'none';
     $('markBody').style.display = hasBody ? '' : 'none';
     const ct = AUTO_CONTENT_TYPE[bt];
     const hasCt = getKv('headersEditor').some(r => r.enabled !== false && r.key.toLowerCase() === 'content-type');
     $('autoHeaderHint').innerHTML = hasBody && ct && !hasCt ? `· auto <code>Content-Type: ${ct}</code>` : '';
+}
+
+// ---------- Scripts tab ----------
+function initScriptEditor() {
+    const show = kind => {
+        document.querySelectorAll('#scriptSeg button').forEach(b => b.classList.toggle('active', b.dataset.script === kind));
+        $('preScriptEditor').style.display = kind === 'prerequest' ? '' : 'none';
+        $('postScriptEditor').style.display = kind === 'test' ? '' : 'none';
+        $('scriptSnippets').innerHTML = '<span class="field-label">Snippets</span>' + SCRIPT_SNIPPETS[kind].map(([label], i) => `<div class="snippet" data-sn="${i}" title="${esc(SCRIPT_SNIPPETS[kind][i][1])}">${esc(label)}</div>`).join('')
+            + '<p class="hint" style="margin-top:8px">Logs appear in the <a href="#" onclick="toggleConsole(true);return false" style="color:var(--accent)">Console</a>. <code>pm.environment.set()</code> saves to the active environment.</p>';
+        $('scriptSnippets').dataset.kind = kind;
+    };
+    $('scriptSeg').addEventListener('click', e => { const b = e.target.closest('[data-script]'); if (b) show(b.dataset.script); });
+    $('scriptSnippets').addEventListener('click', e => {
+        const sn = e.target.closest('[data-sn]');
+        if (!sn) return;
+        const kind = $('scriptSnippets').dataset.kind;
+        const ed = kind === 'prerequest' ? $('preScriptEditor') : $('postScriptEditor');
+        ed.value = (ed.value.trim() ? ed.value.replace(/\s*$/, '\n\n') : '') + SCRIPT_SNIPPETS[kind][+sn.dataset.sn][1];
+        ed.focus();
+        ed.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    ['preScriptEditor', 'postScriptEditor'].forEach(id => $(id).addEventListener('input', updateIndicators));
+    show('prerequest');
 }
 
 // ---------- Request settings ----------
@@ -821,10 +853,8 @@ function sendOrCancel() {
 }
 
 async function sendRequest() {
-    const dto = buildRequestDto();
+    let dto = buildRequestDto();
     if (!dto.url) { toast('Enter a URL first', true); $('urlInput').focus(); return; }
-    const missing = undefinedVars(dto);
-    if (missing.length) toast(`Undefined: ${missing.map(n => `{{${n}}}`).join(', ')}${activeEnv() ? '' : ' (no environment selected)'}`, true);
     const tab = activeTab();
     const ctrl = new AbortController();
     tab.inFlight = ctrl;
@@ -833,7 +863,14 @@ async function sendRequest() {
     setSending(true);
     showResponseLoading();
     try {
+        const ctx = createScriptContext(dto, { requestName: tab.name || defaultRequestName(dto) });
+        if (dto.preRequestScript) dto = await runPreRequest(ctx, dto.preRequestScript);
+        const missing = undefinedVars(dto);
+        if (missing.length) toast(`Undefined: ${missing.map(n => `{{${n}}}`).join(', ')}${activeEnv() ? '' : ' (no environment selected)'}`, true);
         const result = await executeWithFiles(dto, tab, ctrl.signal);
+        logNetwork(ctx.requestName, wireRequest(dto, currentEnvVars()), result);
+        if (dto.postResponseScript) await runPostResponse(ctx, dto.postResponseScript, result);
+        if (ctx.tests.length) result.testResults = [...(result.testResults || []), ...ctx.tests];
         tab.result = result;
         const ok = result.success && result.statusCode < 400;
         recordTelemetry(ok);
@@ -2450,8 +2487,15 @@ async function startRunner() {
     const runOne = async (item, it, rowVars) => {
         let result, failed = false;
         try {
-            const dto = applyDataVars(await api('GET', `/api/requests/${item.id}`), rowVars);
+            let dto = applyDataVars(await api('GET', `/api/requests/${item.id}`), rowVars);
+            const ctx = createScriptContext(dto, { requestName: item.name, iterationData: rowVars, iteration: it - 1, envId });
+            if (dto.preRequestScript) dto = await runPreRequest(ctx, dto.preRequestScript);
             result = await api('POST', '/api/execute' + (envId ? `?environmentId=${envId}` : ''), prepareForSend(dto));
+            logNetwork(`Runner · ${item.name}`, wireRequest(dto, parseEnvVars(state.environments.find(e => String(e.id) === envId)?.variables)), result);
+            if (dto.postResponseScript) await runPostResponse(ctx, dto.postResponseScript, result);
+            if (ctx.tests.length) result.testResults = [...(result.testResults || []), ...ctx.tests];
+            // the next request in the run must see values captured or set by this one
+            if (result.captureEnvironment) await loadEnvironments();
         } catch (e) {
             result = { success: false, error: e.message, testResults: [] };
         }
@@ -2940,6 +2984,8 @@ function paletteSources() {
         ['Toggle side-by-side layout', '', 'columns', () => toggleLayout()],
         ['Toggle sound effects (sci-fi)', '', 'sound-on', () => toggleSound()],
         ['Keyboard shortcuts', '?', 'keyboard', () => showShortcuts()],
+        ['Toggle console', MOD + '⌥C', 'terminal', () => toggleConsole()],
+        ['Clear console', '', 'terminal', () => clearConsole()],
         ['Show history', '', 'history', () => switchSidebar('history')],
     ];
     actions.forEach(([label, key, ic, run]) => items.push({ kind: 'Action', label, sub: '', shortcut: key, icon: ic, run }));
@@ -3171,7 +3217,7 @@ function bootSequence() {
 }
 
 function showShortcuts() {
-    const rows = [[MOD + 'K', 'Search & jump to anything'], [MOD + '↵', 'Send request'], [MOD + 'S', 'Save request'], [MOD + 'F', 'Find in response'], [MOD + 'B', 'Show / hide sidebar'], ['Enter', 'Send (in the URL bar)'], ['⌥T', 'New tab'], ['⌥W', 'Close tab'], ['Esc', 'Close dialog / menu'], ['?', 'Show this list'],
+    const rows = [[MOD + 'K', 'Search & jump to anything'], [MOD + '↵', 'Send request'], [MOD + 'S', 'Save request'], [MOD + 'F', 'Find in response'], [MOD + 'B', 'Show / hide sidebar'], [MOD + '⌥C', 'Show / hide console'], ['Enter', 'Send (in the URL bar)'], ['⌥T', 'New tab'], ['⌥W', 'Close tab'], ['Esc', 'Close dialog / menu'], ['?', 'Show this list'],
         ['Double-click', 'Rename an item in the sidebar'], ['Right-click', 'Item and tab menus'], ['Middle-click', 'Close a tab'], ['Paste cURL', 'Into the URL bar to import it']];
     uiDialog({
         title: 'Keyboard shortcuts', okText: 'Close', alertOnly: true,
