@@ -1,10 +1,10 @@
 // Reqly website: shared header/footer, small interactions, and the settings you will want to change.
 const SITE = {
-    version: '1.0.0',
+    version: '1.0.0',               // released version, not the in-development one (see gradle.properties)
     released: 'October 2026',
     github: 'https://github.com/ShaikRaihan93/reqly',
-    // Upload Reqly-<version>.dmg to a GitHub release and this link always serves the newest one
-    macDownload: 'https://github.com/ShaikRaihan93/reqly/releases/latest/download/Reqly-1.0.0.dmg',
+    // The released version shown on the site. Update it after publishing release v<version> with Reqly-<version>.dmg
+    get macDownload() { return `${this.github}/releases/download/v${this.version}/Reqly-${this.version}.dmg`; },
     releases: 'https://github.com/ShaikRaihan93/reqly/releases',
     email: 'hello@reqly.app',        // TODO: replace with the inbox you want people to write to
     owner: 'Shaik Raihan',

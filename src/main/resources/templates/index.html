@@ -447,7 +447,7 @@
             <div class="modal-body about-body">
                 <img src="/favicon.svg" alt="" class="about-logo">
                 <h3 id="aboutTitle" class="about-name">Reqly</h3>
-                <div class="about-version">Version 1.0.0</div>
+                <div class="about-version" th:text="|Version ${appVersion}|">Version</div>
                 <p class="about-tag">The API client that stays on your machine.</p>
                 <div class="about-facts">
                     <div><span>Data folder</span><code>~/reqly-data</code></div>

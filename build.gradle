@@ -5,7 +5,7 @@ plugins {
 }
 
 group = 'com.reqly'
-version = '1.0.0'
+// version comes from gradle.properties (see bumpVersion below)
 description = 'Reqly — Lightweight API Testing Tool'
 
 java {
@@ -66,6 +66,12 @@ dependencies {
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
+springBoot {
+	buildInfo {
+		excludes = ['time'] // keep builds reproducible; the version is what matters
+	}
+}
+
 tasks.named('test') {
 	useJUnitPlatform()
 }
@@ -81,7 +87,7 @@ tasks.named('bootRun') {
 // ---------------------------------------------------------------------------
 // Desktop packaging (jpackage, bundles its own Java runtime)
 //   ./gradlew packageMacApp   -> build/dist/Reqly.app   (quick local test)
-//   ./gradlew packageMac      -> build/dist/Reqly-1.0.0.dmg
+//   ./gradlew packageMac      -> build/dist/Reqly-<version>.dmg
 // Reqly.app's executable is the native shell (packaging/macos/shell/main.swift): it starts the bundled
 // server and shows Reqly in its own window, so nothing opens in a browser.
 // Signing/notarisation: pass -PmacSignIdentity="Developer ID Application: Name (TEAMID)"
@@ -166,4 +172,34 @@ tasks.register('packageMac', Exec) {
 		'--dest', distDir.get().asFile.path]
 	if (signIdentity) cmd += ['--mac-sign', '--mac-signing-key-user-name', signIdentity]
 	commandLine cmd
+}
+
+// ---------------------------------------------------------------------------
+// Versioning: every change gets a new version and a CHANGELOG entry.
+//   ./gradlew bumpVersion -Pnote="Runner runs data rows in parallel"            -> 1.0.0 to 1.0.1
+//   ./gradlew bumpVersion -Ppart=minor -Pnote="OpenAPI import"                  -> 1.0.1 to 1.1.0
+// patch = fixes and small changes, minor = new features, major = breaking changes.
+// The website (website/assets/site.js) shows the released version: update it when publishing a release.
+// ---------------------------------------------------------------------------
+tasks.register('bumpVersion') {
+	group = 'versioning'
+	description = 'Raises the version in gradle.properties and adds a CHANGELOG entry (-Ppart=patch|minor|major -Pnote="...")'
+	doLast {
+		def part = (project.findProperty('part') ?: 'patch').toString()
+		def note = project.findProperty('note')?.toString()?.trim()
+		if (!note) throw new GradleException('Describe the change: -Pnote="What changed"')
+		def (major, minor, patch) = project.version.toString().tokenize('.').collect { it as int }
+		def next = [major: "${major + 1}.0.0", minor: "${major}.${minor + 1}.0", patch: "${major}.${minor}.${patch + 1}"][part]
+		if (!next) throw new GradleException("Unknown part '${part}': use patch, minor or major")
+
+		def props = file('gradle.properties')
+		props.text = props.text.replaceFirst(/(?m)^version=.*$/, "version=${next}")
+
+		def log = file('CHANGELOG.md')
+		def entry = "## [${next}] - ${new Date().format('yyyy-MM-dd')}\n\n" + note.split(/\s*;\s*/).collect { "- ${it}" }.join('\n') + '\n\n'
+		def text = log.exists() ? log.text : '# Changelog\n\n'
+		def at = text.indexOf('## [')
+		log.text = at < 0 ? text + entry : text.substring(0, at) + entry + text.substring(at)
+		println "Reqly ${project.version} -> ${next}"
+	}
 }

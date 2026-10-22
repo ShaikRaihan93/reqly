@@ -4,7 +4,7 @@ A lightweight, self-hosted API testing tool built with Spring Boot. Think Postma
 
 ## Install (macOS)
 
-Download `Reqly-1.0.0.dmg`, open it and drag **Reqly** into Applications. Reqly bundles its own Java runtime.
+Download `Reqly-<version>.dmg` from the [latest release](https://github.com/ShaikRaihan93/reqly/releases/latest), open it and drag **Reqly** into Applications. Reqly bundles its own Java runtime.
 Reqly opens in its own window with a Dock icon and the usual Mac menus, like Postman or Slack; no browser
 needed. It starts its local server itself and stops it when you quit (⌘Q). ⌘T / ⌘W open and close request
 tabs, ⌘+ / ⌘− zoom, and **Help → Show Logs** opens `~/reqly-data/logs`.
@@ -28,7 +28,7 @@ Data is stored in `~/reqly-data/` (embedded H2 database, encryption key, automat
 ```bash
 ./gradlew test            # unit + integration tests
 ./gradlew packageMacApp   # build/dist/Reqly.app
-./gradlew packageMac      # build/dist/Reqly-1.0.0.dmg
+./gradlew packageMac      # build/dist/Reqly-<version>.dmg
 ./gradlew packageMac -PmacSignIdentity="Developer ID Application: Your Name (TEAMID)"   # signed
 ```
 
@@ -38,6 +38,20 @@ Gradle, so build with an Apple-silicon (aarch64) JDK to get a native arm64 app i
 
 Unsigned builds show an "unidentified developer" warning on other Macs. To distribute, sign with an Apple
 Developer ID and notarise the DMG (`xcrun notarytool submit … --wait`, then `xcrun stapler staple`).
+
+### Versioning
+
+`gradle.properties` holds the version; the jar, the macOS app and DMG, and the version shown in the app all
+come from it. Every change gets a new version and a CHANGELOG entry:
+
+```bash
+./gradlew bumpVersion -Pnote="Fix the runner's parallel setting"              # 1.0.1 -> 1.0.2
+./gradlew bumpVersion -Ppart=minor -Pnote="OpenAPI import"                    # 1.0.2 -> 1.1.0
+```
+
+Use `patch` for fixes and small changes, `minor` for new features, `major` for breaking changes. When you
+publish a release (tag `v<version>` with `Reqly-<version>.dmg` attached), set `version` in
+`website/assets/site.js` to it so the site's download button points at that release.
 
 ## Admin dashboard & database access
 
