@@ -582,3 +582,9 @@
 :root[data-theme="scifi"] .palette-item.active { background: linear-gradient(90deg, rgba(0, 240, 255, 0.2), transparent); box-shadow: inset 2px 0 0 var(--accent); }
 :root[data-theme="scifi"] .tree-row.fx-flash { animation: sf-row-flash 1s ease-out; }
 @keyframes sf-row-flash { 0%, 40% { background-color: rgba(0, 240, 255, 0.3); box-shadow: inset 0 0 0 1px var(--accent); } 100% { background-color: transparent; } }
+
+/* Variable autocomplete */
+:root[data-theme="scifi"] .var-suggest { background: rgba(6, 14, 30, 0.97); border-color: var(--accent); box-shadow: 0 0 22px rgba(0, 240, 255, 0.3); border-radius: 3px; animation: sf-pop .15s ease-out; }
+:root[data-theme="scifi"] .suggest-item.active { background: linear-gradient(90deg, rgba(0, 240, 255, 0.2), transparent); box-shadow: inset 2px 0 0 var(--accent); }
+:root[data-theme="scifi"] .suggest-item .name { color: var(--magenta); text-shadow: 0 0 6px rgba(255, 43, 214, 0.5); }
+:root[data-theme="scifi"] .row-secret.active { color: var(--yellow); filter: drop-shadow(0 0 4px var(--yellow)); }

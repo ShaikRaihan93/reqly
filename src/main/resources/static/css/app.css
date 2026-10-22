@@ -576,3 +576,18 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: non
 .palette-foot { display: flex; gap: 16px; padding: 8px 14px; border-top: 1px solid var(--border); font-size: 11px; color: var(--text-muted); }
 .palette-foot .kbd { margin-right: 3px; }
 @media (max-width: 1000px) { .palette-trigger span:nth-child(2) { display: none; } .palette-trigger { min-width: 0; flex: 0 0 auto; } }
+
+/* ---------- Variable autocomplete & secrets ---------- */
+.var-suggest { display: none; position: fixed; z-index: 260; min-width: 240px; max-width: 420px; max-height: 260px; overflow-y: auto; background: var(--bg-tertiary); border: 1px solid var(--border-strong); border-radius: var(--radius); box-shadow: var(--shadow); padding: 4px; }
+.var-suggest.active { display: block; }
+.suggest-item { display: flex; gap: 12px; align-items: baseline; padding: 6px 8px; border-radius: 4px; cursor: pointer; font-family: var(--mono); font-size: 12px; }
+.suggest-item.active { background: var(--bg-input); }
+.suggest-item .name { color: var(--orange); white-space: nowrap; }
+.suggest-item .val { color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; text-align: right; }
+.suggest-empty { padding: 8px 10px; color: var(--text-muted); font-size: 12px; }
+.kv-table input[type=password] { width: 100%; background: transparent; border: none; padding: 7px 10px; font-size: 12px; outline: none; font-family: var(--mono); letter-spacing: 2px; }
+.row-secret { opacity: .35; }
+.kv-table tr:hover .row-secret { opacity: .7; }
+.row-secret.active { opacity: 1 !important; color: var(--yellow); }
+.popover td svg.i { width: 11px; height: 11px; vertical-align: -1px; }
+.kv-table tr.placeholder .row-secret { visibility: hidden; }

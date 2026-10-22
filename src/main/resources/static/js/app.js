@@ -239,7 +239,7 @@ function setKv(id, rows, resetMode = false) {
         return;
     }
     el.dataset.mode = 'table';
-    el.innerHTML = `<table class="kv-table"><thead><tr>${cfg.toggle ? '<th class="col-check"></th>' : ''}<th>${cfg.keyLabel}</th><th>${cfg.valLabel}</th><th class="col-del"></th></tr></thead><tbody></tbody></table>`;
+    el.innerHTML = `<table class="kv-table"><thead><tr>${cfg.toggle ? '<th class="col-check"></th>' : ''}<th>${cfg.keyLabel}</th><th>${cfg.valLabel}</th>${cfg.secrets ? '<th class="col-del"></th>' : ''}<th class="col-del"></th></tr></thead><tbody></tbody></table>`;
     rows.forEach(r => appendKvRow(id, r));
     appendKvRow(id, null);
     updateBulkButton(id);
@@ -252,14 +252,15 @@ function appendKvRow(id, row) {
     else if (row.enabled === false) tr.className = 'disabled';
     tr.innerHTML = (cfg.toggle ? `<td class="col-check"><input type="checkbox" title="Include in the request (unchecked rows are kept but not sent)" ${!row || row.enabled !== false ? 'checked' : ''}></td>` : '')
         + `<td><input type="text" data-k spellcheck="false" placeholder="${row ? '' : esc(cfg.keyPh)}" value="${esc(row?.key ?? '')}"></td>`
-        + `<td><input type="text" data-v spellcheck="false" placeholder="${row ? '' : esc(cfg.valPh)}" value="${esc(row?.value ?? '')}"></td>`
+        + `<td><input type="${row?.secret ? 'password' : 'text'}" data-v spellcheck="false" autocomplete="off" placeholder="${row ? '' : esc(cfg.valPh)}" value="${esc(row?.value ?? '')}"></td>`
+        + (cfg.secrets ? `<td class="col-del"><button class="icon-btn row-secret${row?.secret ? ' active' : ''}" title="Secret: mask this value on screen">${icon('lock')}</button></td>` : '')
         + `<td class="col-del"><button class="icon-btn row-del" title="Remove">${icon('x')}</button></td>`;
     $(id).querySelector('tbody').appendChild(tr);
 }
 
 function promoteKvRow(id, tr) {
     tr.classList.remove('placeholder');
-    tr.querySelectorAll('input[type=text]').forEach(i => { i.placeholder = ''; });
+    tr.querySelectorAll('input[data-k], input[data-v]').forEach(i => { i.placeholder = ''; });
     appendKvRow(id, null);
 }
 
@@ -268,7 +269,7 @@ function getKv(id) {
     if (el.dataset.mode === 'bulk') return bulkToRows(el.querySelector('textarea').value);
     return [...el.querySelectorAll('tbody tr:not(.placeholder)')].map(tr => {
         const cb = tr.querySelector('input[type=checkbox]');
-        return { key: tr.querySelector('[data-k]').value, value: tr.querySelector('[data-v]').value, enabled: !cb || cb.checked };
+        return { key: tr.querySelector('[data-k]').value, value: tr.querySelector('[data-v]').value, enabled: !cb || cb.checked, secret: !!tr.querySelector('.row-secret.active') };
     }).filter(r => r.key || r.value);
 }
 
@@ -693,6 +694,8 @@ function sendOrCancel() {
 async function sendRequest() {
     const dto = buildRequestDto();
     if (!dto.url) { toast('Enter a URL first', true); $('urlInput').focus(); return; }
+    const missing = undefinedVars(dto);
+    if (missing.length) toast(`Undefined: ${missing.map(n => `{{${n}}}`).join(', ')}${activeEnv() ? '' : ' (no environment selected)'}`, true);
     const tab = activeTab();
     const ctrl = new AbortController();
     tab.inFlight = ctrl;
@@ -839,9 +842,9 @@ function renderCaptures(result) {
 }
 
 /** Shows a variable value, masked if it is marked secret in the active environment. */
-function displayValue(name, value) {
+function displayValue(name, value, env = activeEnv()) {
     const v = String(value ?? '');
-    if (!isSecretVar(name)) return v.length > 300 ? v.slice(0, 300) + '…' : v;
+    if (!isSecretVar(name, env)) return v.length > 300 ? v.slice(0, 300) + '…' : v;
     return v ? '•'.repeat(Math.min(12, Math.max(6, v.length))) : '';
 }
 
@@ -1555,7 +1558,7 @@ function selectEnv(id) {
     const env = state.environments.find(e => e.id === id);
     if (!env) return;
     editingEnvId = id;
-    renderEnvEditor(env.name, parseEnvVars(env.variables));
+    renderEnvEditor(env.name, parseEnvVars(env.variables), parseSecrets(env.secrets));
     renderEnvList();
 }
 
@@ -1566,7 +1569,7 @@ function newEnvironment() {
     const n = $('envName'); n.focus(); n.select();
 }
 
-function renderEnvEditor(name, vars) {
+function renderEnvEditor(name, vars, secrets = []) {
     const isActive = editingEnvId != null && String(editingEnvId) === $('envSelect').value;
     $('envEditor').innerHTML = `
         <input type="text" class="env-name-input" id="envName" value="${esc(name)}" placeholder="Environment name" />
@@ -1580,19 +1583,32 @@ function renderEnvEditor(name, vars) {
                 <button class="btn btn-primary" onclick="saveEnvironment()">Save</button>
             </div>
         </div>`;
-    if (!kvConfig.envVarsEditor) kvConfig.envVarsEditor = { toggle: false, keyLabel: 'Variable', valLabel: 'Value', keyPh: 'Add variable', valPh: 'Value' };
+    if (!kvConfig.envVarsEditor) kvConfig.envVarsEditor = { toggle: false, secrets: true, keyLabel: 'Variable', valLabel: 'Value', keyPh: 'Add variable', valPh: 'Value' };
     const ed = $('envVarsEditor');
     ed.addEventListener('input', e => { const tr = e.target.closest('tr'); if (tr?.classList.contains('placeholder')) promoteKvRow('envVarsEditor', tr); });
-    ed.addEventListener('click', e => { const d = e.target.closest('.row-del'); if (d) d.closest('tr').remove(); });
-    setKv('envVarsEditor', mapToRows(vars, true), true);
+    ed.addEventListener('click', e => {
+        const d = e.target.closest('.row-del');
+        if (d) return d.closest('tr').remove();
+        const lock = e.target.closest('.row-secret');
+        if (lock) {
+            const on = lock.classList.toggle('active');
+            lock.closest('tr').querySelector('[data-v]').type = on ? 'password' : 'text';
+        }
+    });
+    // Secret values are revealed only while their field is focused
+    ed.addEventListener('focusin', e => { if (e.target.matches('[data-v][type=password]')) e.target.type = 'text'; });
+    ed.addEventListener('focusout', e => { if (e.target.matches('[data-v]') && e.target.closest('tr').querySelector('.row-secret.active')) e.target.type = 'password'; });
+    setKv('envVarsEditor', mapToRows(vars, true).map(r => ({ ...r, secret: secrets.includes(r.key) })), true);
 }
 
 async function saveEnvironment() {
     const name = $('envName').value.trim();
     if (!name) return toast('Environment name is required', true);
-    const variables = JSON.stringify(rowsToMap(getKv('envVarsEditor'), true));
+    const rows = getKv('envVarsEditor');
+    const variables = JSON.stringify(rowsToMap(rows, true));
+    const secrets = JSON.stringify(rows.filter(r => r.secret && r.key).map(r => r.key));
     try {
-        const saved = await api('POST', '/api/environments', { id: editingEnvId, name, variables });
+        const saved = await api('POST', '/api/environments', { id: editingEnvId, name, variables, secrets });
         await loadEnvironments();
         selectEnv(saved.id);
         toast('Environment saved');
@@ -1601,7 +1617,7 @@ async function saveEnvironment() {
 
 async function duplicateEnv(id) {
     const env = state.environments.find(e => e.id === id);
-    const saved = await api('POST', '/api/environments', { name: env.name + ' Copy', variables: env.variables });
+    const saved = await api('POST', '/api/environments', { name: env.name + ' Copy', variables: env.variables, secrets: env.secrets || '[]' });
     await loadEnvironments();
     selectEnv(saved.id);
 }
@@ -1630,7 +1646,7 @@ function toggleEnvQuickLook(ev) {
     const env = state.environments.find(e => String(e.id) === $('envSelect').value);
     const vars = Object.entries(parseEnvVars(env?.variables));
     pop.innerHTML = `<div class="popover-head"><span>${env ? esc(env.name) : 'No environment selected'}</span><button class="btn btn-sm" onclick="$('envPopover').classList.remove('active');openEnvModal(${env?.id ?? 'undefined'})">${env ? 'Edit' : 'Manage'}</button></div>
-        <div class="popover-body">${env ? (vars.length ? `<table>${vars.map(([k, v]) => `<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`).join('')}</table>` : '<div class="hint" style="padding:10px 12px">No variables in this environment</div>')
+        <div class="popover-body">${env ? (vars.length ? `<table>${vars.map(([k, v]) => `<tr><td>${esc(k)}${isSecretVar(k, env) ? ' ' + icon('lock', 'muted') : ''}</td><td>${esc(displayValue(k, v, env))}</td></tr>`).join('')}</table>` : '<div class="hint" style="padding:10px 12px">No variables in this environment</div>')
             : '<div class="hint" style="padding:10px 12px">Pick an environment to use its {{variables}} in requests.</div>'}</div>`;
     const r = $('envQuickLookBtn').getBoundingClientRect();
     pop.style.top = (r.bottom + 6) + 'px';
@@ -2144,13 +2160,121 @@ function initUrlVarTooltips() {
             const vars = currentEnvVars();
             const env = state.environments.find(x => String(x.id) === $('envSelect').value);
             const html = Object.prototype.hasOwnProperty.call(vars, name)
-                ? `<div class="tip-var">{{${esc(name)}}} = <span class="v">${esc(vars[name]) || '<i>(empty)</i>'}</span></div><div class="tip-sub">From “${esc(env.name)}”</div>`
+                ? `<div class="tip-var">{{${esc(name)}}} = <span class="v">${esc(displayValue(name, vars[name])) || '<i>(empty)</i>'}</span></div><div class="tip-sub">From “${esc(env.name)}”${isSecretVar(name) ? ' · secret' : ''}</div>`
                 : `<div class="tip-var tip-missing">{{${esc(name)}}} is not defined</div><div class="tip-sub">${env ? `Add it to “${esc(env.name)}” in Environments` : 'No environment selected. Pick one in the header'}</div>`;
             tooltip.showAt(html, span.getBoundingClientRect());
         }, 250);
     });
     input.addEventListener('mouseleave', clear);
     ['keydown', 'scroll'].forEach(ev => input.addEventListener(ev, clear));
+}
+
+// ============================================================
+// Variables in any field: hover to resolve, type {{ to autocomplete, warn on undefined
+// ============================================================
+const VAR_FIELDS = '#urlInput, #paramsEditor input[type=text], #headersEditor input[type=text], #formEditor input[type=text], #authFields input, #bodyEditor';
+
+function varsIn(text) { return [...new Set([...String(text || '').matchAll(/\{\{([^{}]+)\}\}/g)].map(m => m[1]))]; }
+
+/** Tooltip text for a field that contains {{variables}}. */
+function varTipHtml(text) {
+    const vars = currentEnvVars();
+    const env = activeEnv();
+    const names = varsIn(text);
+    if (!names.length) return '';
+    return names.slice(0, 8).map(n => Object.prototype.hasOwnProperty.call(vars, n)
+        ? `<div class="tip-var">{{${esc(n)}}} = <span class="v">${esc(displayValue(n, vars[n])) || '<i>(empty)</i>'}</span></div>`
+        : `<div class="tip-var tip-missing">{{${esc(n)}}} is not defined</div>`).join('')
+        + (names.length > 8 ? `<div class="tip-sub">+${names.length - 8} more</div>` : '')
+        + `<div class="tip-sub">${env ? `From “${esc(env.name)}”` : 'No environment selected'}</div>`;
+}
+
+/** Variables used by the request that the active environment doesn't define. */
+function undefinedVars(dto) {
+    const vars = currentEnvVars();
+    const texts = [dto.url, dto.body, ...Object.keys(dto.params || {}), ...Object.values(dto.params || {}), ...Object.keys(dto.headers || {}), ...Object.values(dto.headers || {}), ...Object.values(dto.authConfig || {})];
+    return [...new Set(texts.flatMap(varsIn))].filter(n => !Object.prototype.hasOwnProperty.call(vars, n));
+}
+
+// Caret pixel position inside an input/textarea, via an off-screen mirror element
+function caretCoords(el) {
+    const cs = getComputedStyle(el);
+    const div = document.createElement('div');
+    ['fontFamily', 'fontSize', 'fontWeight', 'letterSpacing', 'lineHeight', 'paddingTop', 'paddingLeft', 'paddingRight', 'borderTopWidth', 'borderLeftWidth', 'boxSizing', 'tabSize'].forEach(p => { div.style[p] = cs[p]; });
+    Object.assign(div.style, { position: 'absolute', visibility: 'hidden', top: '0', left: '-9999px', width: el.offsetWidth + 'px', whiteSpace: el.tagName === 'TEXTAREA' ? 'pre-wrap' : 'pre', wordWrap: 'break-word' });
+    div.textContent = el.value.slice(0, el.selectionStart);
+    const span = document.createElement('span');
+    span.textContent = '\u200b';
+    div.appendChild(span);
+    document.body.appendChild(div);
+    const r = el.getBoundingClientRect();
+    const x = r.left + span.offsetLeft - el.scrollLeft;
+    const y = r.top + span.offsetTop - el.scrollTop + span.offsetHeight;
+    div.remove();
+    return { x: Math.min(x, r.right - 20), y: Math.min(y, r.bottom) };
+}
+
+const suggest = { el: null, items: [], index: 0, start: 0 };
+
+function updateSuggest(el) {
+    const before = el.value.slice(0, el.selectionStart);
+    const m = before.match(/\{\{([\w.$-]*)$/);
+    if (!m) return hideSuggest();
+    const prefix = m[1].toLowerCase();
+    const vars = currentEnvVars();
+    const names = Object.keys(vars);
+    suggest.items = names.filter(n => n.toLowerCase().includes(prefix))
+        .sort((a, b) => (a.toLowerCase().startsWith(prefix) ? 0 : 1) - (b.toLowerCase().startsWith(prefix) ? 0 : 1) || a.localeCompare(b))
+        .slice(0, 12);
+    suggest.el = el;
+    suggest.start = before.length - m[0].length;
+    suggest.index = 0;
+    const box = $('varSuggest');
+    const env = activeEnv();
+    box.innerHTML = suggest.items.length
+        ? suggest.items.map((n, i) => `<div class="suggest-item${i === 0 ? ' active' : ''}" data-i="${i}"><span class="name">{{${esc(n)}}}</span><span class="val">${esc(displayValue(n, vars[n]))}</span></div>`).join('')
+        : `<div class="suggest-empty">${env ? (names.length ? 'No matching variables' : `“${esc(env.name)}” has no variables yet`) : 'Select an environment to see its variables'}</div>`;
+    const c = caretCoords(el);
+    box.classList.add('active');
+    box.style.left = Math.min(c.x, window.innerWidth - box.offsetWidth - 8) + 'px';
+    box.style.top = (c.y + box.offsetHeight + 8 > window.innerHeight ? c.y - box.offsetHeight - 24 : c.y + 4) + 'px';
+}
+
+function hideSuggest() { $('varSuggest').classList.remove('active'); suggest.el = null; }
+
+function acceptSuggest(i = suggest.index) {
+    const el = suggest.el, name = suggest.items[i];
+    if (!el || !name) return hideSuggest();
+    const end = el.selectionStart;
+    const after = el.value.slice(end).replace(/^[\w.$-]*\}{0,2}/, '');
+    el.value = el.value.slice(0, suggest.start) + `{{${name}}}` + after;
+    const caret = suggest.start + name.length + 4;
+    el.setSelectionRange(caret, caret);
+    hideSuggest();
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.focus();
+}
+
+function initVariableHelpers() {
+    document.addEventListener('input', e => { if (e.target.matches?.(VAR_FIELDS)) updateSuggest(e.target); else if (suggest.el) hideSuggest(); });
+    document.addEventListener('keydown', e => {
+        if (!suggest.el || !$('varSuggest').classList.contains('active') || e.target !== suggest.el) return;
+        const items = $('varSuggest').querySelectorAll('.suggest-item');
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+            if (!items.length) return;
+            e.preventDefault();
+            suggest.index = (suggest.index + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
+            items.forEach((it, i) => it.classList.toggle('active', i === suggest.index));
+        } else if ((e.key === 'Enter' || e.key === 'Tab') && items.length) {
+            e.preventDefault(); e.stopPropagation();
+            acceptSuggest();
+        } else if (e.key === 'Escape') {
+            e.preventDefault(); e.stopPropagation();
+            hideSuggest();
+        }
+    }, true);
+    $('varSuggest').addEventListener('mousedown', e => { const it = e.target.closest('.suggest-item'); if (it) { e.preventDefault(); acceptSuggest(+it.dataset.i); } });
+    document.addEventListener('focusout', e => { if (e.target === suggest.el) setTimeout(hideSuggest, 120); });
 }
 
 // ============================================================
@@ -2406,6 +2530,14 @@ function initTooltips() {
         place(el.getBoundingClientRect());
     };
     document.addEventListener('mouseover', e => {
+        const varField = e.target.matches?.(VAR_FIELDS) && e.target.id !== 'urlInput' && /\{\{[^{}]+\}\}/.test(e.target.value) ? e.target : null;
+        if (varField) {
+            if (varField === current) return;
+            hide();
+            current = varField;
+            timer = setTimeout(() => { if (document.activeElement !== varField || !suggest.el) tooltip.showAt(varTipHtml(varField.value), varField.getBoundingClientRect()); }, 400);
+            return;
+        }
         const el = e.target.closest('[title], [data-tip]');
         if (el === current) return;
         hide();
@@ -2439,6 +2571,7 @@ async function init() {
     initUrlVarTooltips();
     initThemedSelects();
     initPalette();
+    initVariableHelpers();
     updateThemeButton();
     renderHud();
     bootSequence();
