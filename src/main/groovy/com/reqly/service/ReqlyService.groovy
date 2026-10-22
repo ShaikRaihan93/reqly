@@ -190,10 +190,26 @@ class ReqlyService {
 
         if (dto.testScript?.trim()) {
             result.testResults = testRunner.runTests(dto.testScript, result)
+            result.captures = testRunner.captureValues(dto.testScript, result)
+            saveCaptures(result, environmentId)
         }
 
         saveHistory(dto, result)
         result
+    }
+
+    /** Writes successful captures into the active environment so later requests can use {{name}}. */
+    private void saveCaptures(ExecutionResult result, Long environmentId) {
+        def ok = result.captures?.findAll { it.ok }
+        if (!ok || environmentId == null) return
+        envRepo.findById(environmentId).ifPresent { env ->
+            Map<String, String> vars = [:]
+            try { if (env.variables) vars = objectMapper.readValue(env.variables, new TypeReference<LinkedHashMap<String, String>>() {}) } catch (ignored) {}
+            ok.each { vars[it.name as String] = it.value as String }
+            env.variables = objectMapper.writeValueAsString(vars)
+            envRepo.save(env)
+            result.captureEnvironment = env.name
+        }
     }
 
     BulkExecutionSummary executeBulk(RequestDto dto, int times, Long environmentId) {

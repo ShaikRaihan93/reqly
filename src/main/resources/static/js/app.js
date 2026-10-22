@@ -712,6 +712,11 @@ async function sendRequest() {
                 setTimeout(() => toast(`✦ Achievement · All ${tests.length} test${tests.length > 1 ? 's' : ''} passed  +${tests.length * 10} XP`, false, 'achievement'), 450);
             }
         }
+        if (result.captureEnvironment) {
+            await loadEnvironments();
+            const names = result.captures.filter(c => c.ok).map(c => `{{${c.name}}}`).join(', ');
+            setTimeout(() => toast(`Saved ${names} to ${result.captureEnvironment}`), isScifi() ? 1800 : 0);
+        }
         if (tab.id === state.activeTabId) displayResponse(result);
         if (state.sidebarTab === 'history') loadHistory();
     } catch (e) {
@@ -812,12 +817,39 @@ function displayResponse(result) {
         : '<div class="empty-state"><div>No headers</div></div>';
 
     const tests = result.testResults || [];
+    const caps = result.captures || [];
     const passed = tests.filter(t => t.passed).length;
     const cnt = $('cntResTests');
-    cnt.textContent = tests.length ? `${passed}/${tests.length}` : '';
-    cnt.classList.toggle('fail', passed < tests.length);
-    $('testResults').innerHTML = tests.length ? renderTestList(tests) : '<div class="empty-state"><div>No tests for this request</div></div>';
+    cnt.textContent = tests.length ? `${passed}/${tests.length}` : caps.length ? `${caps.filter(c => c.ok).length}↧` : '';
+    cnt.classList.toggle('fail', passed < tests.length || caps.some(c => !c.ok));
+    $('testResults').innerHTML = tests.length || caps.length
+        ? (tests.length ? renderTestList(tests) : '') + renderCaptures(result)
+        : '<div class="empty-state"><div>No tests for this request</div></div>';
 }
+
+/** Values saved from the response with `source -> name` lines in the Tests tab. */
+function renderCaptures(result) {
+    const caps = result.captures || [];
+    if (!caps.length) return '';
+    const target = result.captureEnvironment
+        ? `Saved to <b>${esc(result.captureEnvironment)}</b>`
+        : '<span style="color:var(--yellow)">Not saved: select an environment to keep captured values</span>';
+    return `<div class="capture-head"><span class="field-label" style="margin:0">Captured variables</span><span class="hint">${target}</span></div>`
+        + caps.map(c => `<div class="test-result"><span class="test-tag ${c.ok ? 'pass' : 'fail'}">${c.ok ? 'SET' : 'MISS'}</span><div><div class="test-name">{{${esc(c.name)}}} <span class="muted">← ${esc(c.source)}</span></div><div class="test-msg">${c.ok ? esc(displayValue(c.name, c.value)) : esc(c.message || '')}</div></div></div>`).join('');
+}
+
+/** Shows a variable value, masked if it is marked secret in the active environment. */
+function displayValue(name, value) {
+    const v = String(value ?? '');
+    if (!isSecretVar(name)) return v.length > 300 ? v.slice(0, 300) + '…' : v;
+    return v ? '•'.repeat(Math.min(12, Math.max(6, v.length))) : '';
+}
+
+function isSecretVar(name, env = activeEnv()) {
+    return !!env && parseSecrets(env.secrets).includes(name);
+}
+function activeEnv() { return state.environments.find(e => String(e.id) === $('envSelect').value); }
+function parseSecrets(json) { try { const v = JSON.parse(json || '[]'); return Array.isArray(v) ? v : []; } catch (e) { return []; } }
 
 function renderTestList(tests) {
     const passed = tests.filter(t => t.passed).length;
@@ -1869,6 +1901,7 @@ async function startRunner() {
                 </div>
                 ${rowVars ? `<div class="run-iter" title="${esc(Object.entries(rowVars).map(([k, v]) => `${k} = ${v}`).join('\n'))}">row ${it}: ${esc(Object.entries(rowVars).map(([k, v]) => `${k}=${v}`).join(', '))}</div>` : ''}
                 ${!result.success ? `<div class="tests"><div style="color:var(--red)">${esc(result.error || 'Request failed')}</div></div>` : ''}
+                ${(result.captures || []).length ? `<div class="tests">${result.captures.map(c => `<div style="color:${c.ok ? 'var(--accent)' : 'var(--yellow)'}">${c.ok ? '↧' : '!'} {{${esc(c.name)}}} ${c.ok ? '= ' + esc(displayValue(c.name, c.value)) : esc(c.message || '')}</div>`).join('')}</div>` : ''}
                 ${tests.length ? `<div class="tests">${tests.map(t => `<div style="color:${t.passed ? 'var(--green)' : 'var(--red)'}">${t.passed ? '✓' : '✗'} ${esc(t.testName)}${t.passed ? '' : ` <span class="muted">${esc(t.message || '')}</span>`}</div>`).join('')}</div>` : ''}`;
             $('runnerRows').appendChild(row);
             row.scrollIntoView({ block: 'nearest' });

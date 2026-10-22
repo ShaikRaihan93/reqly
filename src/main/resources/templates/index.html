@@ -169,7 +169,10 @@
                                     <div class="snippet" data-snippet='header.Content-Type contains "json"'>Content-Type is JSON</div>
                                     <div class="snippet" data-snippet='json.data.id == "123"'>JSON value equals</div>
                                     <div class="snippet" data-snippet="json.items.length > 0">JSON array not empty</div>
-                                    <p class="hint" style="margin-top:8px">Lines starting with <code>//</code> are ignored.</p>
+                                    <span class="field-label" style="margin-top:10px">Save to variable</span>
+                                    <div class="snippet" data-snippet="json.data.token -> token">JSON value → {{token}}</div>
+                                    <div class="snippet" data-snippet="header.X-Request-Id -> requestId">Header → {{requestId}}</div>
+                                    <p class="hint" style="margin-top:8px"><code>source -> name</code> saves a response value into the active environment, so the next request can use <code>{{name}}</code>. Lines starting with <code>//</code> are ignored.</p>
                                 </div>
                             </div>
                         </div>

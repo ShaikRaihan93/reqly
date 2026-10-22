@@ -9,5 +9,8 @@ class ExecutionResult {
     long responseSizeBytes
     String error
     List<TestResult> testResults
+    /** Values saved from the response into the environment ({@code json.x -> name} lines in Tests) */
+    List<Map<String, Object>> captures
+    String captureEnvironment
     int csvRow
 }

@@ -552,3 +552,5 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: non
 .ctx-item .method-badge { width: auto; text-align: left; font-size: 11px; }
 .backup-export { display: flex; align-items: center; gap: 16px; justify-content: space-between; padding: 14px; border: 1px solid var(--border); border-radius: var(--radius); }
 .backup-export .btn { text-decoration: none; flex-shrink: 0; }
+.capture-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 16px 0 4px; }
+.test-summary + .test-result { margin-top: 0; }

@@ -18,8 +18,51 @@ class TestRunner {
 
         testScript.split("\\n")
             .collect { it.trim() }
-            .findAll { it && !it.startsWith("//") && !it.startsWith("#") }
+            .findAll { it && !it.startsWith("//") && !it.startsWith("#") && !(it ==~ CAPTURE) }
             .collect { evaluateTest(it, execution) }
+    }
+
+    /** `source -> variableName`, e.g. `json.data.token -> token` or `header.X-Request-Id -> requestId` */
+    static final java.util.regex.Pattern CAPTURE = ~/^(.+?)\s*->\s*([A-Za-z_][\w.-]*)$/
+
+    /** Evaluates capture lines; each entry is [name, source, value, ok, message]. */
+    List<Map<String, Object>> captureValues(String testScript, ExecutionResult exec) {
+        if (!testScript?.trim() || !exec.success) return []
+        testScript.split("\\n").collect { it.trim() }.findAll { it && !it.startsWith("//") && !it.startsWith("#") }.collect { line ->
+            def m = line =~ CAPTURE
+            if (!m.matches()) return null
+            String source = m.group(1).trim(), name = m.group(2)
+            try {
+                String value = extract(source, exec)
+                value != null
+                    ? [name: name, source: source, value: value, ok: true]
+                    : [name: name, source: source, ok: false, message: "${source} was not found in the response".toString()]
+            } catch (Exception e) {
+                [name: name, source: source, ok: false, message: "Could not read ${source}: ${e.message}".toString()]
+            }
+        }.findAll()
+    }
+
+    private String extract(String source, ExecutionResult exec) {
+        if (source == "status") return String.valueOf(exec.statusCode)
+        if (source == "responseTime") return String.valueOf(exec.responseTimeMs)
+        if (source == "body") return exec.responseBody
+        if (source.startsWith("header.")) {
+            def name = source.substring("header.".length())
+            return exec.responseHeaders?.find { k, v -> k.equalsIgnoreCase(name) }?.value
+        }
+        if (source.startsWith("json.")) {
+            def path = source.substring("json.".length())
+            def root = objectMapper.readTree(exec.responseBody)
+            if (path.endsWith(".length")) {
+                def arr = navigateJson(root, path.substring(0, path.lastIndexOf(".length")))
+                return arr?.isArray() ? String.valueOf(arr.size()) : null
+            }
+            def node = navigateJson(root, path)
+            if (node == null || node.isMissingNode()) return null
+            return node.isValueNode() ? (node.isNull() ? null : node.asText()) : node.toString()
+        }
+        throw new IllegalArgumentException("use json.<path>, header.<name>, status, responseTime or body")
     }
 
     private TestResult evaluateTest(String line, ExecutionResult exec) {
