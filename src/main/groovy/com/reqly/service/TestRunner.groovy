@@ -150,7 +150,8 @@ class TestRunner {
         def headerName = rest.substring(0, spaceIdx).trim()
         def assertion = rest.substring(spaceIdx).trim()
 
-        def headerValue = exec.responseHeaders?.getOrDefault(headerName.toLowerCase(), "") ?: ""
+        // header names are case-insensitive (servers send Content-Type, content-type, ...)
+        def headerValue = exec.responseHeaders?.find { k, v -> k.equalsIgnoreCase(headerName) }?.value ?: ""
 
         if (assertion.startsWith("contains ")) {
             def expected = extractQuoted(assertion.substring("contains".length()).trim())
@@ -160,6 +161,9 @@ class TestRunner {
             def expected = extractQuoted(assertion.substring(2).trim())
             result.passed = headerValue == expected
             result.message = "Header ${headerName}: expected \"${expected}\", got \"${headerValue}\""
+        } else {
+            result.passed = false
+            result.message = "Unknown header assertion: use contains \"text\" or == \"value\""
         }
     }
 
