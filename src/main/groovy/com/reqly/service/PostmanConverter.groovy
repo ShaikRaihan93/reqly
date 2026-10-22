@@ -202,6 +202,28 @@ class PostmanConverter {
         item
     }
 
+    // --- Full backup: every top-level collection (Postman v2.1) plus all environments ---
+
+    @Transactional(readOnly = true)
+    Map<String, Object> exportAll() {
+        [
+            reqly      : [format: "reqly-backup", version: 1, exportedAt: java.time.OffsetDateTime.now().toString()],
+            collections: collectionRepo.findByParentIsNullOrderBySortOrder().collect { exportCollection(it.id) },
+            environments: envRepo.findAll().collect { [name: it.name, variables: it.variables, secrets: it.secrets] },
+        ]
+    }
+
+    /** Restores a backup by adding its collections and environments next to the existing ones. */
+    @Transactional
+    Map<String, Object> importAll(String json) {
+        Map data = objectMapper.readValue(json, Map)
+        if (data.reqly?.format != "reqly-backup") throw new IllegalArgumentException("Not a Reqly backup file")
+        int requests = 0
+        (data.collections ?: []).each { requests += importCollection(objectMapper.writeValueAsString(it)).requests as int }
+        (data.environments ?: []).each { envRepo.save(new Environment(name: it.name, variables: it.variables, secrets: it.secrets)) }
+        [collections: (data.collections ?: []).size(), requests: requests, environments: (data.environments ?: []).size()]
+    }
+
     // --- Helpers ---
 
     private String json(Object o) { objectMapper.writeValueAsString(o) }

@@ -148,12 +148,13 @@ const uiPrompt = (title, value, placeholder) => uiDialog({ title, okText: 'Save'
 // ============================================================
 // Context menu
 // ============================================================
-function openMenu(ev, items, anchorRow) {
+function openMenu(ev, items, anchorRow, anchorEl = null) {
     ev.preventDefault();
     ev.stopPropagation();
     const menu = $('ctxMenu');
+    menu.style.minWidth = anchorEl ? anchorEl.offsetWidth + 'px' : '';
     menu.innerHTML = items.map((it, i) => it === '-' ? '<div class="ctx-sep"></div>'
-        : `<div class="ctx-item${it.danger ? ' danger' : ''}" data-i="${i}">${it.icon ? icon(it.icon) : ''}<span>${esc(it.label)}</span>${it.shortcut ? `<span class="shortcut">${it.shortcut}</span>` : ''}</div>`).join('');
+        : `<div class="ctx-item${it.danger ? ' danger' : ''}${it.checked ? ' checked' : ''}" data-i="${i}">${it.checked !== undefined ? `<span class="ctx-check">${it.checked ? '✓' : ''}</span>` : ''}${it.icon ? icon(it.icon) : ''}<span class="${it.className || ''}">${esc(it.label)}</span>${it.shortcut ? `<span class="shortcut">${it.shortcut}</span>` : ''}</div>`).join('');
     menu.onclick = e => {
         const el = e.target.closest('.ctx-item');
         if (!el) return;
@@ -163,14 +164,43 @@ function openMenu(ev, items, anchorRow) {
     document.querySelectorAll('.menu-open').forEach(r => r.classList.remove('menu-open'));
     if (anchorRow) anchorRow.classList.add('menu-open');
     menu.classList.add('active');
-    const r = ev.target.closest('button')?.getBoundingClientRect();
+    const r = (anchorEl || ev.target.closest('button'))?.getBoundingClientRect();
     let x = r ? r.left : ev.clientX, y = r ? r.bottom + 4 : ev.clientY;
     x = Math.min(x, window.innerWidth - menu.offsetWidth - 8);
     if (y + menu.offsetHeight > window.innerHeight - 8) y = Math.max(8, (r ? r.top - 4 : ev.clientY) - menu.offsetHeight);
     menu.style.left = x + 'px';
     menu.style.top = y + 'px';
 }
+/**
+ * Native <select> popups are drawn by the OS and ignore the theme, so every select opens
+ * the app's own menu instead. The <select> stays the source of truth (value, change events, keyboard).
+ */
+let menuSelect = null;
+function initThemedSelects() {
+    document.addEventListener('mousedown', e => {
+        const sel = e.target.closest('select');
+        if (!sel || sel.multiple || sel.disabled || e.button !== 0) return;
+        e.preventDefault();
+        if (menuSelect === sel && $('ctxMenu').classList.contains('active')) { hideMenu(); return; }
+        sel.focus();
+        const items = [...sel.options].map(o => ({
+            label: o.textContent,
+            checked: o.selected,
+            className: sel.classList.contains('method-select') ? `method-badge method-${methodClass(o.value)}` : '',
+            action: () => {
+                if (sel.value === o.value) return;
+                sel.value = o.value;
+                sel.dispatchEvent(new Event('input', { bubbles: true }));
+                sel.dispatchEvent(new Event('change', { bubbles: true }));
+            },
+        }));
+        openMenu(e, items, null, sel.closest('.env-picker') || sel);
+        menuSelect = sel;
+    }, true);
+}
+
 function hideMenu() {
+    menuSelect = null;
     $('ctxMenu').classList.remove('active');
     document.querySelectorAll('.menu-open').forEach(r => r.classList.remove('menu-open'));
 }
@@ -1592,6 +1622,8 @@ function setImportMode(mode) {
     document.querySelectorAll('#importTabs .tab').forEach(t => t.classList.toggle('active', t.dataset.import === mode));
     $('importCurlPane').style.display = mode === 'curl' ? '' : 'none';
     $('importPostmanPane').style.display = mode === 'postman' ? '' : 'none';
+    $('importBackupPane').style.display = mode === 'backup' ? '' : 'none';
+    $('importBtn').textContent = mode === 'backup' ? 'Restore' : 'Import';
 }
 
 async function importCurlText(curl, intoCurrent = false) {
@@ -1617,6 +1649,14 @@ async function runImport() {
             await importCurlText(curl);
             $('curlInput').value = '';
             closeModal('importModal');
+        } else if (importMode === 'backup') {
+            const file = $('backupFile').files[0];
+            if (!file) return toast('Choose a backup file first', true);
+            const res = await api('POST', '/api/import/all', await file.text());
+            await Promise.all([loadTree(), loadEnvironments()]);
+            closeModal('importModal');
+            $('backupFile').value = ''; $('backupFileName').textContent = 'Choose a reqly-backup-….json file…';
+            toast(`Restored ${res.collections} collection${res.collections === 1 ? '' : 's'}, ${res.requests} requests, ${res.environments} environment${res.environments === 1 ? '' : 's'}`);
         } else {
             const json = $('postmanInput').value.trim();
             if (!json) return toast('Choose or paste a Postman collection first', true);
@@ -1975,6 +2015,7 @@ function initEvents() {
 
     // Import
     $('importTabs').addEventListener('click', e => { const t = e.target.closest('[data-import]'); if (t) setImportMode(t.dataset.import); });
+    $('backupFile').addEventListener('change', e => { $('backupFileName').textContent = e.target.files[0]?.name || 'Choose a reqly-backup-….json file…'; });
     $('postmanFile').addEventListener('change', async e => {
         const f = e.target.files[0];
         if (!f) return;
@@ -2002,7 +2043,7 @@ function initEvents() {
 
     // Global: dismiss menus, shortcuts
     document.addEventListener('click', e => {
-        if (!e.target.closest('#ctxMenu')) hideMenu();
+        if (!e.target.closest('#ctxMenu') && !(menuSelect && e.target.closest('select') === menuSelect)) hideMenu();
         if (!e.target.closest('#envPopover') && !e.target.closest('#envQuickLookBtn')) $('envPopover').classList.remove('active');
     });
     document.querySelectorAll('.modal-overlay').forEach(o => o.addEventListener('mousedown', e => {
@@ -2222,6 +2263,7 @@ async function init() {
     initResizers();
     initTooltips();
     initUrlVarTooltips();
+    initThemedSelects();
     updateThemeButton();
     renderHud();
     bootSequence();

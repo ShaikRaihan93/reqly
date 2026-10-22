@@ -250,10 +250,23 @@
                 <div class="seg-tabs tabs" id="importTabs">
                     <div class="tab active" data-import="curl">cURL</div>
                     <div class="tab" data-import="postman">Postman collection</div>
+                    <div class="tab" data-import="backup">Reqly backup</div>
                 </div>
                 <div id="importCurlPane">
                     <textarea class="code" id="curlInput" rows="8" spellcheck="false" placeholder="curl --location 'https://api.example.com/users' --header 'Authorization: Bearer …'"></textarea>
                     <p class="hint" style="margin-top:8px">Tip: you can also paste a cURL command straight into the URL bar.</p>
+                </div>
+                <div id="importBackupPane" style="display:none">
+                    <div class="backup-export">
+                        <div>
+                            <div class="section-title" style="margin-bottom:4px">Export everything</div>
+                            <p class="hint">All collections, folders, requests and environments in one JSON file. Keep it somewhere safe or move it to another machine.</p>
+                        </div>
+                        <a class="btn btn-primary" href="/api/export/all" download><svg class="i"><use href="#i-download"/></svg>Export</a>
+                    </div>
+                    <div class="section-title" style="margin:18px 0 8px">Restore from a backup</div>
+                    <label class="file-drop"><svg class="i"><use href="#i-import"/></svg><span id="backupFileName">Choose a reqly-backup-….json file…</span><input type="file" id="backupFile" accept=".json,application/json" hidden /></label>
+                    <p class="hint" style="margin-top:8px">Restoring adds the backup's collections and environments next to what you already have; nothing is overwritten. The server also keeps automatic database snapshots in <code>~/reqly-data/backups</code> (last 10 starts).</p>
                 </div>
                 <div id="importPostmanPane" style="display:none">
                     <label class="file-drop" style="margin-bottom:10px"><svg class="i"><use href="#i-import"/></svg><span id="postmanFileName">Choose a Postman collection (.json, v2.0 / v2.1)…</span><input type="file" id="postmanFile" accept=".json,application/json" hidden /></label>

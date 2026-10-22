@@ -82,8 +82,9 @@ class RequestExecutor {
             def httpRequest = builder.build()
             log.info("=== Outgoing Request ===")
             log.info("Method: {} URL: {}", httpRequest.method(), httpRequest.uri())
-            log.info("Headers: {}", httpRequest.headers().map())
-            log.info("Body: {}", body)
+            log.info("Headers: {}", maskHeaders(httpRequest.headers().map()))
+            log.info("Body: {} chars", body?.length() ?: 0)
+            log.debug("Body: {}", body)
             log.info("BodyType: {} | Insecure: {}", request.bodyType, insecure)
             log.info("========================")
 
@@ -128,6 +129,13 @@ class RequestExecutor {
         if (has(SSLException)) return "SSL/TLS error: ${detail}. For self-signed certificates, add the header _insecure: true."
         if (e instanceof IllegalArgumentException) return "Invalid URL: ${detail}"
         "${e.class.simpleName}${detail ? ': ' + detail : ''}"
+    }
+
+    private static final SENSITIVE = ~/(?i)authorization|cookie|token|secret|password|api[-_]?key|x-auth|session/
+
+    /** Never write credentials to the log. */
+    static Map<String, Object> maskHeaders(Map<String, List<String>> headers) {
+        headers.collectEntries { k, v -> [k, (k =~ SENSITIVE).find() ? "***" : v] }
     }
 
     private static String hostOf(String url) {

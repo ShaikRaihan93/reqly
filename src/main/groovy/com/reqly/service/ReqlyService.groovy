@@ -230,10 +230,11 @@ class ReqlyService {
 
     // --- Environments ---
 
-    Environment saveEnvironment(Long id, String name, String variables) {
+    Environment saveEnvironment(Long id, String name, String variables, String secrets = null) {
         def env = id != null ? envRepo.findById(id).orElse(new Environment()) : new Environment()
         env.name = name
         env.variables = variables
+        if (secrets != null) env.secrets = secrets
         envRepo.save(env)
     }
 

@@ -544,3 +544,11 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: non
 }
 .method-select { padding-right: 32px; background-position: right 10px center; }
 .env-picker select { padding-right: 26px; background-position: right 6px center; background-size: 12px; }
+
+/* Select menus rendered by the app (see initThemedSelects) */
+.ctx-menu { max-height: min(360px, 70vh); overflow-y: auto; }
+.ctx-check { width: 14px; flex-shrink: 0; color: var(--accent); font-size: 12px; text-align: center; }
+.ctx-item.checked { color: var(--accent); }
+.ctx-item .method-badge { width: auto; text-align: left; font-size: 11px; }
+.backup-export { display: flex; align-items: center; gap: 16px; justify-content: space-between; padding: 14px; border: 1px solid var(--border); border-radius: var(--radius); }
+.backup-export .btn { text-decoration: none; flex-shrink: 0; }

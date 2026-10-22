@@ -17,6 +17,10 @@ class Environment {
     @Column(columnDefinition = "TEXT")
     String variables
 
+    /** JSON array of variable names whose values are masked in the UI */
+    @Column(columnDefinition = "TEXT")
+    String secrets
+
     @Column(name = "created_at")
     LocalDateTime createdAt = LocalDateTime.now()
 

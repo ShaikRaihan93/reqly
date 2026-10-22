@@ -143,6 +143,19 @@ class ApiController {
         service.importCurl(body.curl)
     }
 
+    @GetMapping("/export/all")
+    ResponseEntity<Map<String, Object>> exportAll() {
+        def stamp = java.time.LocalDate.now().toString()
+        ResponseEntity.ok()
+            .header("Content-Disposition", "attachment; filename=\"reqly-backup-${stamp}.json\"")
+            .body(postman.exportAll())
+    }
+
+    @PostMapping(value = "/import/all", consumes = "application/json")
+    Map<String, Object> importAll(@RequestBody String json) {
+        postman.importAll(json)
+    }
+
     @PostMapping(value = "/import/postman", consumes = "application/json")
     ResponseEntity<Map<String, Object>> importPostman(@RequestBody String json) {
         try {
@@ -162,7 +175,7 @@ class ApiController {
     @PostMapping("/environments")
     Environment saveEnvironment(@RequestBody Map<String, Object> body) {
         def id = body.id != null ? Long.valueOf(body.id.toString()) : null
-        service.saveEnvironment(id, body.name as String, body.variables as String)
+        service.saveEnvironment(id, body.name as String, body.variables as String, body.secrets as String)
     }
 
     @DeleteMapping("/environments/{id}")
