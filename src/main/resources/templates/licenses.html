@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Open-source licenses · Reqly</title>
+    <link rel="icon" href="/favicon.ico" sizes="any">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/css/fonts.css">
+    <link rel="stylesheet" href="/css/app.css">
+    <link rel="stylesheet" href="/css/scifi.css">
+    <link rel="stylesheet" href="/css/auth.css">
+    <script>
+        try {
+            var t = JSON.parse(localStorage.getItem("reqly.uiTheme") || "null");
+            document.documentElement.dataset.theme = ["scifi", "dark", "light"].indexOf(t) >= 0 ? t : "scifi";
+        } catch (e) { document.documentElement.dataset.theme = "scifi"; }
+    </script>
+</head>
+<body class="doc-page">
+<main class="doc">
+    <div class="doc-top"><a href="/" class="brand-logo" style="font-size:17px"><img src="/favicon.svg" alt="" style="width:26px;height:26px"><span>Reqly</span></a><a href="/">← Back to Reqly</a></div>
+    <h1>Open-source licenses</h1>
+    <p class="doc-meta">Reqly is built on these open-source projects. Thank you to everyone who maintains them.</p>
+    <table>
+        <thead><tr><th>Component</th><th>License</th><th>Project</th></tr></thead>
+        <tbody>
+            <tr><td>Spring Boot, Spring Framework, Spring Security Crypto</td><td>Apache-2.0</td><td>spring.io</td></tr>
+            <tr><td>Apache Groovy</td><td>Apache-2.0</td><td>groovy-lang.org</td></tr>
+            <tr><td>Apache Tomcat (embedded)</td><td>Apache-2.0</td><td>tomcat.apache.org</td></tr>
+            <tr><td>Apache HttpClient 5</td><td>Apache-2.0</td><td>hc.apache.org</td></tr>
+            <tr><td>Jackson</td><td>Apache-2.0</td><td>github.com/FasterXML/jackson</td></tr>
+            <tr><td>Thymeleaf</td><td>Apache-2.0</td><td>thymeleaf.org</td></tr>
+            <tr><td>OpenCSV</td><td>Apache-2.0</td><td>opencsv.sourceforge.net</td></tr>
+            <tr><td>Flyway</td><td>Apache-2.0</td><td>flywaydb.org</td></tr>
+            <tr><td>Hibernate ORM</td><td>LGPL-2.1-or-later</td><td>hibernate.org</td></tr>
+            <tr><td>H2 Database Engine</td><td>MPL-2.0 or EPL-1.0</td><td>h2database.com</td></tr>
+            <tr><td>MariaDB Connector/J</td><td>LGPL-2.1</td><td>mariadb.com</td></tr>
+            <tr><td>Orbitron font (Matt McInerney)</td><td>SIL OFL 1.1 · <a href="/fonts/OFL-orbitron.txt">license</a></td><td>github.com/theleagueof/orbitron</td></tr>
+            <tr><td>Rajdhani font (Indian Type Foundry)</td><td>SIL OFL 1.1 · <a href="/fonts/OFL-rajdhani.txt">license</a></td><td>fonts.google.com/specimen/Rajdhani</td></tr>
+            <tr><td>JetBrains Mono font</td><td>SIL OFL 1.1 · <a href="/fonts/OFL-jetbrains-mono.txt">license</a></td><td>jetbrains.com/lp/mono</td></tr>
+            <tr><td>Catppuccin colour palette (dark/light themes)</td><td>MIT</td><td>github.com/catppuccin/catppuccin</td></tr>
+        </tbody>
+    </table>
+    <p style="margin-top:18px">Full license texts are in <code>THIRD_PARTY_NOTICES.md</code> in the distribution. LGPL components are used unmodified as separate libraries and can be replaced with compatible versions.</p>
+</main>
+</body>
+</html>

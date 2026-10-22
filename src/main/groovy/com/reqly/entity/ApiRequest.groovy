@@ -1,6 +1,7 @@
 package com.reqly.entity
 
 import com.fasterxml.jackson.annotation.JsonIgnore
+import com.reqly.security.EncryptedStringConverter
 import jakarta.persistence.*
 import java.time.LocalDateTime
 
@@ -21,6 +22,7 @@ class ApiRequest {
     @Column(nullable = false, length = 2048)
     String url
 
+    @Convert(converter = EncryptedStringConverter)
     @Column(columnDefinition = "TEXT")
     String headers
 
@@ -36,6 +38,7 @@ class ApiRequest {
     @Column(name = "auth_type")
     String authType
 
+    @Convert(converter = EncryptedStringConverter)
     @Column(columnDefinition = "TEXT", name = "auth_config")
     String authConfig
 
@@ -69,6 +72,12 @@ class ApiRequest {
     @OneToMany(mappedBy = "apiRequest", cascade = CascadeType.ALL, orphanRemoval = true)
     @JsonIgnore
     List<RequestHistory> history = []
+
+    /** Account this belongs to; every query is scoped to the signed-in user */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "owner_id")
+    @JsonIgnore
+    AppUser owner
 
     @Column(name = "sort_order")
     Integer sortOrder = 0

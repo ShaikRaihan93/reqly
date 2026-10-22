@@ -249,7 +249,6 @@ function makeExpect(actual) {
 // ============================================================
 // pm sandbox
 // ============================================================
-const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
 
 /**
  * Context shared by a request's pre-request and post-response scripts:
@@ -326,111 +325,182 @@ function responseApi(result) {
     return res;
 }
 
-function buildPm(ctx, eventName, result) {
-    const envApi = {
-        get name() { return ctx.env?.name; },
-        get: k => ctx.envVars[k],
-        set: (k, v) => {
-            if (!ctx.env) { logToConsole('warn', 'pm.environment', [`pm.environment.set("${k}") ignored: no environment is selected`]); return; }
-            ctx.envVars[k] = typeof v === 'string' ? v : JSON.stringify(v);
-            ctx.envChanges.set(k, ctx.envVars[k]);
-            ctx.envDirty = true;
-        },
-        unset: k => { if (k in ctx.envVars) { delete ctx.envVars[k]; ctx.envChanges.set(k, undefined); ctx.envDirty = true; } },
-        has: k => Object.prototype.hasOwnProperty.call(ctx.envVars, k),
-        toObject: () => ({ ...ctx.envVars }),
-        replaceIn: s => substituteVars(s, ctx.envVars),
+// ---------- Sandbox ----------
+/*
+ * Scripts run in a sandboxed iframe (sandbox="allow-scripts", no same-origin): an opaque origin with
+ * no access to Reqly's page, cookies, storage or API. They talk to Reqly only through postMessage:
+ * console output, test results, environment changes and pm.sendRequest calls, which Reqly performs.
+ */
+
+/** Runs inside the sandbox frame (its source is embedded into the frame, it never runs in the app). */
+function sandboxMain() {
+    const AsyncFn = Object.getPrototypeOf(async function () {}).constructor;
+    const post = m => parent.postMessage(m, '*');
+    const waiting = new Map();
+    let seq = 0;
+    const clean = v => {
+        if (v === undefined) return { __undef: true };
+        if (v instanceof Error) return { __error: true, name: v.name, message: v.message };
+        if (typeof v === 'function') return `[Function ${v.name || 'anonymous'}]`;
+        if (typeof v === 'bigint' || typeof v === 'symbol') return String(v);
+        try { return JSON.parse(JSON.stringify(v)); } catch (e) { return String(v); }
     };
-    const lookup = k => ctx.localVars[k] ?? ctx.iterationData[k] ?? ctx.envVars[k];
-    const pm = {
-        info: { eventName, requestName: ctx.requestName, iteration: ctx.iteration, requestId: ctx.dto.id ?? null },
-        environment: envApi,
-        // collection variables and globals share the environment here, so imported Postman scripts keep working
-        collectionVariables: envApi,
-        globals: envApi,
-        variables: {
-            get: lookup,
-            set: (k, v) => { ctx.localVars[k] = typeof v === 'string' ? v : JSON.stringify(v); },
-            has: k => lookup(k) !== undefined,
-            replaceIn: s => String(s).replace(/\{\{([^{}]+)\}\}/g, (m, k) => lookup(k) ?? m),
-            toObject: () => ({ ...ctx.envVars, ...ctx.iterationData, ...ctx.localVars }),
-        },
-        iterationData: { get: k => ctx.iterationData[k], has: k => k in ctx.iterationData, toObject: () => ({ ...ctx.iterationData }) },
-        request: {
-            get url() { return composeUrl(ctx.dto.url || '', queryRows(ctx.dto)); },
-            set url(v) {
-                const { base, query } = splitUrl(String(v));
-                ctx.dto.url = base;
-                ctx.dto.paramRows = parseQuery(query);
-                ctx.dto.params = rowsToMap(ctx.dto.paramRows, true);
+    window.addEventListener('message', async e => {
+        const m = e.data || {};
+        if (m.type === 'sendResult') {
+            const w = waiting.get(m.reqId);
+            waiting.delete(m.reqId);
+            if (w) m.error ? w.reject(new Error(m.error)) : w.resolve(m.result);
+            return;
+        }
+        if (m.type !== 'run') return;
+        const d = m.data;
+        const env = { ...d.envVars }, local = { ...d.localVars }, req = d.request, tests = [], pendingTests = [], envOps = [];
+        const con = {};
+        ['log', 'info', 'warn', 'error', 'debug'].forEach(l => { con[l] = (...a) => post({ type: 'log', level: l, args: a.map(clean) }); });
+        con.table = con.log; con.dir = con.log;
+        const envApi = {
+            get name() { return d.envName; },
+            get: k => env[k],
+            set: (k, v) => {
+                if (!d.hasEnv) { con.warn(`pm.environment.set("${k}") ignored: no environment is selected`); return; }
+                env[k] = typeof v === 'string' ? v : JSON.stringify(v);
+                envOps.push([k, env[k]]);
             },
-            get method() { return ctx.dto.method; },
-            set method(v) { ctx.dto.method = String(v).toUpperCase(); },
-            headers: headerApi(() => ctx.dto.headers || {}, o => { ctx.dto.headers = o; }),
-            body: {
-                get raw() { return ctx.dto.body ?? ''; },
-                set raw(v) { ctx.dto.body = typeof v === 'string' ? v : JSON.stringify(v); },
-                toString() { return ctx.dto.body ?? ''; },
+            unset: k => { if (k in env) { delete env[k]; envOps.push([k, null]); } },
+            has: k => Object.prototype.hasOwnProperty.call(env, k),
+            toObject: () => ({ ...env }),
+            replaceIn: s => substituteVars(s, env),
+        };
+        const lookup = k => local[k] ?? d.iterationData[k] ?? env[k];
+        const pm = {
+            info: d.info,
+            environment: envApi, collectionVariables: envApi, globals: envApi,
+            variables: {
+                get: lookup,
+                set: (k, v) => { local[k] = typeof v === 'string' ? v : JSON.stringify(v); },
+                has: k => lookup(k) !== undefined,
+                replaceIn: s => String(s).replace(/\{\{([^{}]+)\}\}/g, (x, k) => lookup(k) ?? x),
+                toObject: () => ({ ...env, ...d.iterationData, ...local }),
             },
-        },
-        expect: makeExpect,
-        // Results keep the order tests were declared in; async test bodies are awaited before reporting
-        test: (name, fn) => {
-            const entry = { testName: name, passed: true, message: 'Passed' };
-            ctx.tests.push(entry);
-            const fail = e => { entry.passed = false; entry.message = e?.message || String(e); };
-            try {
-                const r = fn();
-                if (r && typeof r.then === 'function') ctx.pending.push(Promise.resolve(r).catch(fail));
-            } catch (e) { fail(e); }
-        },
-        sendRequest: (req, cb) => scriptSendRequest(req, ctx, cb),
-    };
-    if (result) pm.response = responseApi(result);
-    pm.test.skip = name => ctx.tests.push({ testName: name, passed: true, message: 'Skipped' });
-    return pm;
+            iterationData: { get: k => d.iterationData[k], has: k => k in d.iterationData, toObject: () => ({ ...d.iterationData }) },
+            request: {
+                get url() { return composeUrl(req.url || '', queryRows(req)); },
+                set url(v) { const { base, query } = splitUrl(String(v)); req.url = base; req.paramRows = parseQuery(query); req.params = rowsToMap(req.paramRows, true); },
+                get method() { return req.method; },
+                set method(v) { req.method = String(v).toUpperCase(); },
+                headers: headerApi(() => req.headers || {}, o => { req.headers = o; }),
+                body: { get raw() { return req.body ?? ''; }, set raw(v) { req.body = typeof v === 'string' ? v : JSON.stringify(v); }, toString() { return req.body ?? ''; } },
+            },
+            expect: makeExpect,
+            test: (name, fn) => {
+                const entry = { testName: name, passed: true, message: 'Passed' };
+                tests.push(entry);
+                const fail = x => { entry.passed = false; entry.message = (x && x.message) || String(x); };
+                try { const r = fn(); if (r && typeof r.then === 'function') pendingTests.push(Promise.resolve(r).catch(fail)); } catch (x) { fail(x); }
+            },
+            sendRequest: (r, cb) => new Promise((resolve, reject) => {
+                const reqId = ++seq;
+                waiting.set(reqId, { resolve, reject });
+                post({ type: 'send', reqId, req: clean(r) });
+            }).then(res => { const api = responseApi(res); if (cb) cb(null, api); return api; },
+                    err => { if (cb) cb(err, null); else throw err; }),
+        };
+        pm.test.skip = name => tests.push({ testName: name, passed: true, message: 'Skipped' });
+        if (d.response) pm.response = responseApi(d.response);
+        let error = null;
+        try {
+            const fn = new AsyncFn('pm', 'console', 'postman', 'require', '"use strict";\n' + m.code);
+            await fn(pm, con, { setEnvironmentVariable: envApi.set, getEnvironmentVariable: envApi.get },
+                n => { throw new Error(`require("${n}") is not available in Reqly scripts`); });
+            await Promise.all(pendingTests);
+        } catch (x) {
+            error = { name: (x && x.name) || 'Error', message: (x && x.message) || String(x) };
+        }
+        post({ type: 'done', tests, envOps, localVars: local, request: req, error });
+    });
+    post({ type: 'ready' });
 }
 
-/** pm.sendRequest(urlOrRequest[, callback]) → Promise<response> */
-async function scriptSendRequest(req, ctx, cb) {
+let SANDBOX_HTML = null;
+/** The frame's document: the helpers it needs (copied from this file and app.js) plus sandboxMain. */
+function sandboxHtml() {
+    if (SANDBOX_HTML) return SANDBOX_HTML;
+    const fns = [AssertionError, deepEqual, makeExpect, headerApi, responseApi, splitUrl, safeDecode, parseQuery, composeUrl, substituteVars, sandboxMain].map(f => f.toString()).join('\n');
+    const consts = `const STATUS_TEXT = ${JSON.stringify(STATUS_TEXT)};
+const encQuery = ${encQuery.toString()};
+const mapToRows = ${mapToRows.toString()};
+const rowsToMap = ${rowsToMap.toString()};
+const queryRows = ${queryRows.toString()};`;
+    SANDBOX_HTML = `<!doctype html><meta charset="utf-8"><script>"use strict";\n${consts}\n${fns}\nsandboxMain();<\/script>`;
+    return SANDBOX_HTML;
+}
+
+/** pm.sendRequest, performed by Reqly on the script's behalf. Returns the raw result. */
+async function scriptSendRequest(req, ctx) {
     const r = typeof req === 'string' ? { url: req } : req || {};
     const headers = {};
     (Array.isArray(r.header) ? r.header : Object.entries(r.header || r.headers || {}).map(([key, value]) => ({ key, value })))
         .forEach(h => { headers[h.key] = String(h.value); });
     const dto = { method: (r.method || 'GET').toUpperCase(), url: String(r.url), headers, body: r.body?.raw ?? (typeof r.body === 'string' ? r.body : r.body ? JSON.stringify(r.body) : null), bodyType: 'text' };
-    const source = `${ctx.requestName} · pm.sendRequest`;
-    try {
-        const result = await api('POST', '/api/execute' + (ctx.env ? `?environmentId=${ctx.env.id}` : ''), dto);
-        logNetwork(source, dto, result);
-        const res = responseApi(result);
-        if (!result.success) throw new Error(result.error || 'Request failed');
-        cb?.(null, res);
-        return res;
-    } catch (e) {
-        cb?.(e, null);
-        if (!cb) throw e;
-    }
+    const result = await api('POST', '/api/execute' + (ctx.env ? `?environmentId=${ctx.env.id}` : ''), dto);
+    logNetwork(`${ctx.requestName} · pm.sendRequest`, dto, result);
+    if (!result.success) throw new Error(result.error || 'Request failed');
+    return result;
 }
 
-function scriptConsole(source) {
-    const mk = level => (...args) => logToConsole(level, source, args);
-    return { log: mk('log'), info: mk('info'), warn: mk('warn'), error: mk('error'), debug: mk('debug'), table: mk('log'), dir: mk('log') };
-}
+const restoreLogArg = a => a && a.__undef ? undefined : a && a.__error ? Object.assign(new Error(a.message), { name: a.name }) : a;
 
-/** Runs one script; errors are logged and (for post-response) reported as a failed test. */
+/** Runs one script in a fresh sandbox frame; errors are logged and (for post-response) reported as a failed test. */
 async function runScript(kind, code, ctx, result = null) {
     if (!code || !code.trim()) return;
     const label = kind === 'prerequest' ? 'Pre-request' : 'Post-response';
     const source = `${ctx.requestName} · ${label}`;
-    const pm = buildPm(ctx, kind, result);
-    const require = name => { throw new Error(`require("${name}") is not available in Reqly scripts`); };
-    try {
-        const fn = new AsyncFunction('pm', 'console', 'postman', 'require', '"use strict";\n' + code);
-        await fn(pm, scriptConsole(source), { setEnvironmentVariable: pm.environment.set, getEnvironmentVariable: pm.environment.get }, require);
-        await Promise.all(ctx.pending.splice(0));
-    } catch (e) {
-        logToConsole('error', source, [`${e.name || 'Error'}: ${e.message}`]);
-        ctx.tests.push({ testName: `${label} script`, passed: false, message: `Script error: ${e.message}` });
+    const frame = document.createElement('iframe');
+    frame.setAttribute('sandbox', 'allow-scripts');
+    frame.setAttribute('aria-hidden', 'true');
+    frame.style.display = 'none';
+    const data = {
+        request: JSON.parse(JSON.stringify(ctx.dto)),
+        envVars: ctx.envVars, localVars: ctx.localVars, iterationData: ctx.iterationData,
+        envName: ctx.env?.name, hasEnv: !!ctx.env,
+        info: { eventName: kind, requestName: ctx.requestName, iteration: ctx.iteration, requestId: ctx.dto.id ?? null },
+        response: result ? JSON.parse(JSON.stringify(result)) : null,
+    };
+    const out = await new Promise(resolve => {
+        const timer = setTimeout(() => finish({ error: { name: 'TimeoutError', message: 'The script did not finish within 30 seconds' } }), 30000);
+        const finish = m => { clearTimeout(timer); window.removeEventListener('message', onMsg); resolve(m); };
+        const onMsg = async e => {
+            if (e.source !== frame.contentWindow) return;
+            const m = e.data || {};
+            if (m.type === 'ready') frame.contentWindow.postMessage({ type: 'run', code, data }, '*');
+            else if (m.type === 'log') logToConsole(m.level, source, (m.args || []).map(restoreLogArg));
+            else if (m.type === 'send') {
+                try {
+                    const res = await scriptSendRequest(m.req, ctx);
+                    frame.contentWindow?.postMessage({ type: 'sendResult', reqId: m.reqId, result: res }, '*');
+                } catch (err) {
+                    frame.contentWindow?.postMessage({ type: 'sendResult', reqId: m.reqId, error: err.message }, '*');
+                }
+            } else if (m.type === 'done') finish(m);
+        };
+        window.addEventListener('message', onMsg);
+        frame.srcdoc = sandboxHtml();
+        document.body.appendChild(frame);
+    });
+    frame.remove();
+
+    ctx.tests.push(...(out.tests || []));
+    (out.envOps || []).forEach(([k, v]) => {
+        if (v === null) delete ctx.envVars[k]; else ctx.envVars[k] = v;
+        ctx.envChanges.set(k, v === null ? undefined : v);
+        ctx.envDirty = true;
+    });
+    Object.assign(ctx.localVars, out.localVars || {});
+    if (kind === 'prerequest' && out.request) Object.assign(ctx.dto, out.request);
+    if (out.error) {
+        logToConsole('error', source, [`${out.error.name}: ${out.error.message}`]);
+        ctx.tests.push({ testName: `${label} script`, passed: false, message: `Script error: ${out.error.message}` });
     }
     if (ctx.envDirty) await persistScriptEnv(ctx);
 }

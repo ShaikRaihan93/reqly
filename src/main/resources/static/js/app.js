@@ -33,6 +33,11 @@ async function api(method, url, body, opts = {}) {
         init.body = typeof body === 'string' ? body : JSON.stringify(body);
     }
     const res = await fetch(url, init);
+    if (res.status === 401) {
+        // Session ended (signed out elsewhere, or expired): back to the sign-in page
+        location.href = '/login';
+        throw new Error('Please sign in');
+    }
     if (!res.ok) {
         let msg = `${res.status} ${res.statusText}`;
         try { const j = await res.json(); msg = j.error || j.message || msg; } catch (e) { /* not json */ }
@@ -2959,6 +2964,81 @@ function initVariableHelpers() {
 }
 
 // ============================================================
+// Account
+// ============================================================
+function initials(name) {
+    return (name || '?').trim().split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?';
+}
+
+async function loadUser() {
+    try { state.user = await api('GET', '/api/auth/me'); } catch (e) { return; }
+    $('avatarInitials').textContent = initials(state.user.name);
+    const b = $('accountBtn');
+    b.removeAttribute('title');
+    b.dataset.tip = `${state.user.name}\n${state.user.email}`;
+}
+
+function openAccountMenu(ev) {
+    const u = state.user || {};
+    openMenu(ev, [
+        { label: `${u.name || ''} · ${u.email || ''}`, action: () => openAccountSettings() },
+        '-',
+        { label: 'Account settings…', icon: 'settings', action: () => openAccountSettings() },
+        { label: 'About Reqly', icon: 'file', action: () => openAbout() },
+        { label: 'Privacy Policy', action: () => window.open('/privacy', '_blank') },
+        { label: 'Terms of Use', action: () => window.open('/terms', '_blank') },
+        { label: 'Open-source licenses', action: () => window.open('/licenses', '_blank') },
+        '-',
+        { label: 'Sign out', icon: 'import', danger: true, action: () => signOut() },
+    ]);
+}
+
+function openAccountSettings() {
+    const u = state.user || {};
+    $('accountAvatar').textContent = initials(u.name);
+    $('accountName').textContent = u.name || '';
+    $('accountEmail').textContent = u.email || '';
+    $('accountSince').textContent = u.createdAt ? `Member since ${new Date(u.createdAt).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' })}` : '';
+    $('profileName').value = u.name || '';
+    ['pwCurrent', 'pwNew', 'pwConfirm'].forEach(id => { $(id).value = ''; });
+    openModal('accountModal');
+}
+
+async function saveProfile() {
+    try {
+        state.user = await api('POST', '/api/auth/profile', { name: $('profileName').value });
+        await loadUser();
+        $('accountName').textContent = state.user.name;
+        $('accountAvatar').textContent = initials(state.user.name);
+        toast('Name updated');
+    } catch (e) { toast(e.message, true); }
+}
+
+async function changePassword() {
+    const current = $('pwCurrent').value, next = $('pwNew').value;
+    if (next.length < 8) return toast('Use at least 8 characters for the new password', true);
+    if (next !== $('pwConfirm').value) return toast("The new passwords don't match", true);
+    try {
+        await api('POST', '/api/auth/password', { current, next });
+        closeModal('accountModal');
+        toast('Password updated. Other sessions were signed out');
+    } catch (e) { toast(e.message, true); }
+}
+
+function openAbout() {
+    $('aboutUser').textContent = state.user ? `${state.user.name} <${state.user.email}>` : '';
+    openModal('aboutModal');
+}
+
+async function signOut() {
+    const dirty = state.tabs.filter(t => t.dirty && t.requestId).length;
+    if (dirty && !(await uiDialog({ title: 'Sign out?', message: `${dirty} tab${dirty > 1 ? 's have' : ' has'} unsaved changes. They stay in this browser and will be here when you sign back in.`, okText: 'Sign out' }))) return;
+    persistTabs.flush();
+    await fetch('/api/auth/signout', { method: 'POST' });
+    location.href = '/login';
+}
+
+// ============================================================
 // Command palette (⌘K): jump to any request/folder/environment or run an action
 // ============================================================
 const palette = { items: [], results: [], index: 0 };
@@ -2991,6 +3071,9 @@ function paletteSources() {
         ['Toggle side-by-side layout', '', 'columns', () => toggleLayout()],
         ['Toggle sound effects (sci-fi)', '', 'sound-on', () => toggleSound()],
         ['Keyboard shortcuts', '?', 'keyboard', () => showShortcuts()],
+        ['Account settings', '', 'settings', () => openAccountSettings()],
+        ['About Reqly', '', 'file', () => openAbout()],
+        ['Sign out', '', 'import', () => signOut()],
         ['Toggle console', MOD + '⌥C', 'list', () => toggleDock('console')],
         ['Toggle terminal', '⌃`', 'terminal', () => toggleDock('terminal')],
         ['Clear console', '', 'terminal', () => clearConsole()],
@@ -3312,6 +3395,7 @@ async function init() {
     $('sendBtn').addEventListener('click', ripple);
     $('runnerStartBtn').addEventListener('click', ripple);
     document.querySelectorAll('.snippet').forEach(s => { s.title = 'Inserts: ' + s.dataset.snippet; });
+    await loadUser();
     await loadEnvironments();
     if (!restoreTabs()) newTab();
     await loadTree();

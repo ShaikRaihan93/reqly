@@ -29,6 +29,12 @@ class Collection {
     @JsonIgnore
     List<ApiRequest> requests = []
 
+    /** Account this belongs to; every query is scoped to the signed-in user */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "owner_id")
+    @JsonIgnore
+    AppUser owner
+
     @Column(name = "sort_order")
     Integer sortOrder = 0
 

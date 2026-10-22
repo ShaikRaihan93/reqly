@@ -629,3 +629,10 @@
 :root[data-theme="scifi"] .t-brand { font-family: var(--display); background: linear-gradient(90deg, #7af9ff, #ff2bd6); -webkit-background-clip: text; background-clip: text; color: transparent; }
 :root[data-theme="scifi"] .t-ok { text-shadow: 0 0 6px rgba(77, 255, 160, 0.5); }
 :root[data-theme="scifi"] .t-err { text-shadow: 0 0 6px rgba(255, 61, 110, 0.5); }
+
+/* Account */
+:root[data-theme="scifi"] .avatar-btn { background: rgba(255, 43, 214, 0.12); border-color: var(--magenta); color: #fff; font-family: var(--display); box-shadow: 0 0 10px rgba(255, 43, 214, 0.45); }
+:root[data-theme="scifi"] .avatar-lg { background: linear-gradient(135deg, #00f0ff, #ff2bd6); font-family: var(--display); color: #011018; box-shadow: 0 0 18px rgba(0, 240, 255, 0.5); }
+:root[data-theme="scifi"] .about-name { font-family: var(--display); letter-spacing: 6px; text-transform: uppercase; background: linear-gradient(90deg, #7af9ff, #ff2bd6); -webkit-background-clip: text; background-clip: text; color: transparent; }
+:root[data-theme="scifi"] .about-logo { filter: drop-shadow(0 0 14px rgba(0, 240, 255, 0.7)); animation: sf-logo 6s ease-in-out infinite; }
+:root[data-theme="scifi"] .about-facts { border-color: var(--border-strong); background: rgba(2, 8, 20, 0.6); }

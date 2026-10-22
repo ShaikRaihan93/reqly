@@ -7,6 +7,7 @@ import com.reqly.entity.Environment
 import com.reqly.repository.ApiRequestRepository
 import com.reqly.repository.CollectionRepository
 import com.reqly.repository.EnvironmentRepository
+import com.reqly.security.CurrentUser
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
@@ -39,14 +40,14 @@ class PostmanConverter {
         Map data = objectMapper.readValue(json, Map)
         if (!(data.item instanceof List)) throw new IllegalArgumentException("Not a Postman collection: missing 'item' array")
 
-        def root = collectionRepo.save(new Collection(name: data.info?.name ?: "Imported Collection", description: text(data.info?.description)))
+        def root = collectionRepo.save(new Collection(name: data.info?.name ?: "Imported Collection", description: text(data.info?.description), owner: CurrentUser.get()))
         int count = importItems(data.item as List, root, data.auth as Map)
 
         Environment env = null
         def vars = (data.variable ?: []).findAll { it.key && !it.disabled }
         if (vars) {
             def map = vars.collectEntries { [(it.key): it.value?.toString() ?: ""] }
-            env = envRepo.save(new Environment(name: "${root.name} variables", variables: objectMapper.writeValueAsString(map)))
+            env = envRepo.save(new Environment(name: "${root.name} variables", variables: objectMapper.writeValueAsString(map), owner: CurrentUser.get()))
         }
         [collectionId: root.id, name: root.name, requests: count, environmentId: env?.id]
     }
@@ -57,11 +58,12 @@ class PostmanConverter {
         items.eachWithIndex { item, i ->
             def auth = item.auth != null && item.auth.type != "inherit" ? item.auth as Map : inheritedAuth
             if (item.item instanceof List) {
-                def folder = collectionRepo.save(new Collection(name: item.name ?: "Folder", parent: parent, sortOrder: i))
+                def folder = collectionRepo.save(new Collection(name: item.name ?: "Folder", parent: parent, sortOrder: i, owner: parent.owner))
                 count += importItems(item.item as List, folder, auth)
             } else if (item.request != null) {
                 def req = toApiRequest(item, inheritedAuth)
                 req.collection = parent
+                req.owner = parent.owner
                 req.sortOrder = i
                 requestRepo.save(req)
                 count++
@@ -166,6 +168,7 @@ class PostmanConverter {
     @Transactional(readOnly = true)
     Map<String, Object> exportCollection(Long id) {
         def col = collectionRepo.findById(id).orElseThrow()
+        if (col.owner?.id != CurrentUser.id()) throw new NoSuchElementException("Not found")
         [info: [name: col.name, description: col.description, schema: SCHEMA], item: exportItems(col)]
     }
 
@@ -219,8 +222,8 @@ class PostmanConverter {
     Map<String, Object> exportAll() {
         [
             reqly      : [format: "reqly-backup", version: 1, exportedAt: java.time.OffsetDateTime.now().toString()],
-            collections: collectionRepo.findByParentIsNullOrderBySortOrder().collect { exportCollection(it.id) },
-            environments: envRepo.findAll().collect { [name: it.name, variables: it.variables, secrets: it.secrets] },
+            collections: collectionRepo.findByParentIsNullAndOwnerIdOrderBySortOrder(CurrentUser.id()).collect { exportCollection(it.id) },
+            environments: envRepo.findByOwnerIdOrderById(CurrentUser.id()).collect { [name: it.name, variables: it.variables, secrets: it.secrets] },
         ]
     }
 
@@ -231,7 +234,7 @@ class PostmanConverter {
         if (data.reqly?.format != "reqly-backup") throw new IllegalArgumentException("Not a Reqly backup file")
         int requests = 0
         (data.collections ?: []).each { requests += importCollection(objectMapper.writeValueAsString(it)).requests as int }
-        (data.environments ?: []).each { envRepo.save(new Environment(name: it.name, variables: it.variables, secrets: it.secrets)) }
+        (data.environments ?: []).each { envRepo.save(new Environment(name: it.name, variables: it.variables, secrets: it.secrets, owner: CurrentUser.get())) }
         [collections: (data.collections ?: []).size(), requests: requests, environments: (data.environments ?: []).size()]
     }
 

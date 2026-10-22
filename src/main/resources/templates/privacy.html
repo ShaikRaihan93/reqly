@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Privacy Policy · Reqly</title>
+    <link rel="icon" href="/favicon.ico" sizes="any">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/css/fonts.css">
+    <link rel="stylesheet" href="/css/app.css">
+    <link rel="stylesheet" href="/css/scifi.css">
+    <link rel="stylesheet" href="/css/auth.css">
+    <script>
+        try {
+            var t = JSON.parse(localStorage.getItem("reqly.uiTheme") || "null");
+            document.documentElement.dataset.theme = ["scifi", "dark", "light"].indexOf(t) >= 0 ? t : "scifi";
+        } catch (e) { document.documentElement.dataset.theme = "scifi"; }
+    </script>
+</head>
+<body class="doc-page">
+<main class="doc">
+    <div class="doc-top"><a href="/" class="brand-logo" style="font-size:17px"><img src="/favicon.svg" alt="" style="width:26px;height:26px"><span>Reqly</span></a><a href="/">← Back to Reqly</a></div>
+    <span class="doc-badge">TEMPLATE · REPLACE THE [BRACKETED] PARTS AND HAVE IT REVIEWED BEFORE PUBLISHING</span>
+    <h1>Privacy Policy</h1>
+    <p class="doc-meta">Last updated: [Month Day, Year]</p>
+
+    <div class="callout">
+        <b>The short version:</b> Reqly runs entirely on your computer. We don't operate servers that receive your requests, collections, environments or responses, and the app contains no analytics or tracking.
+    </div>
+
+    <h2>1. Who we are</h2>
+    <p>Reqly is published by [Company Name] ("we", "us"), [registered address]. For privacy questions, contact [privacy@yourdomain.com].</p>
+
+    <h2>2. What Reqly stores, and where</h2>
+    <p>Everything below is stored only on your device, in the <code>reqly-data</code> folder in your home directory:</p>
+    <ul>
+        <li><b>Account details</b>: your name, email address and a salted hash of your password (BCrypt). Your password itself is never stored.</li>
+        <li><b>Your workspace</b>: collections, requests, environments, scripts and test definitions.</li>
+        <li><b>Request history</b>: the last requests you sent, including response bodies, so you can review and compare them.</li>
+        <li><b>Secrets</b>: environment variable values and authentication settings are encrypted at rest with a key that is generated on and kept on your device.</li>
+        <li><b>Backups</b>: an automatic snapshot of the database at each start (the last 10 are kept).</li>
+    </ul>
+
+    <h2>3. What we collect</h2>
+    <p>We do not collect, receive or sell personal data through the Reqly app. Reqly does not include analytics, advertising or crash-reporting services. The only network traffic Reqly creates is the API requests you choose to send, which go directly from your computer to the servers you specify.</p>
+    <p>[If you sell licenses: Purchases are handled by our payment provider, [Provider name, e.g. Paddle or Lemon Squeezy], acting as merchant of record. They process your payment and billing details under their own privacy policy, and share with us only what is needed to issue and support your license (name, email, country, license key).]</p>
+
+    <h2>4. Third parties</h2>
+    <p>Reqly loads no third-party scripts, fonts or images: everything it needs ships with the app. APIs you call through Reqly are operated by their own owners and are subject to their terms and privacy policies.</p>
+
+    <h2>5. Retention and deletion</h2>
+    <p>Your data stays until you delete it. You can clear your request history from the History panel, delete collections and environments in the app, or remove everything by deleting the <code>reqly-data</code> folder. Uninstalling the app does not delete this folder automatically.</p>
+
+    <h2>6. Security</h2>
+    <p>Reqly only accepts connections from your own computer, requires you to sign in, rejects requests from other websites, encrypts stored secrets and never writes credentials to its log files. No system is perfectly secure; keep your computer and account protected.</p>
+
+    <h2>7. Your rights</h2>
+    <p>Because your data stays on your device, you can access, export (Import → Reqly backup → Export), correct or delete it at any time without contacting us. If you're in the EU/EEA or UK and have questions about personal data we hold for licensing, contact us at [privacy@yourdomain.com].</p>
+
+    <h2>8. Children</h2>
+    <p>Reqly is a developer tool and is not directed at children under 16.</p>
+
+    <h2>9. Changes</h2>
+    <p>We'll update this page when our practices change and revise the date at the top.</p>
+</main>
+</body>
+</html>

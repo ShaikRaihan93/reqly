@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign in · Reqly</title>
+    <link rel="icon" href="/favicon.ico" sizes="any">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+    <link rel="stylesheet" href="/css/fonts.css">
+    <link rel="stylesheet" href="/css/app.css">
+    <link rel="stylesheet" href="/css/scifi.css">
+    <link rel="stylesheet" href="/css/auth.css">
+    <script>
+        try {
+            var t = JSON.parse(localStorage.getItem('reqly.uiTheme') || 'null');
+            document.documentElement.dataset.theme = ['scifi', 'dark', 'light'].indexOf(t) >= 0 ? t : 'scifi';
+        } catch (e) { document.documentElement.dataset.theme = 'scifi'; }
+    </script>
+</head>
+<body class="auth-page">
+<main class="auth">
+    <section class="auth-brand" aria-label="About Reqly">
+        <div class="brand-logo"><img src="/favicon.svg" alt=""><span>Reqly</span></div>
+        <div class="brand-copy">
+            <h1>The API client that stays on your machine.</h1>
+            <p>Collections, environments, scripts and a collection runner, without a cloud account. Your requests and tokens never leave this computer.</p>
+            <ul class="brand-points">
+                <li><span class="bp-icon">⇄</span><div><b>Postman import</b><small>Collections, folders, auth and scripts come across intact</small></div></li>
+                <li><span class="bp-icon">⛓</span><div><b>Request chaining</b><small>Capture values from one response and use them in the next</small></div></li>
+                <li><span class="bp-icon">▶</span><div><b>Runner, console &amp; terminal</b><small>Data-driven runs, <code>console.log</code>, and curl at your fingertips</small></div></li>
+                <li><span class="bp-icon">⛨</span><div><b>Private by design</b><small>Local-only server, encrypted secrets, no telemetry</small></div></li>
+            </ul>
+        </div>
+        <div class="brand-foot">Reqly 1.0.0</div>
+    </section>
+
+    <section class="auth-panel">
+        <div class="auth-card" id="authCard">
+            <div class="auth-tabs" role="tablist" aria-label="Sign in or create an account">
+                <button role="tab" type="button" data-mode="signin" id="tabSignin">Sign in</button>
+                <button role="tab" type="button" data-mode="signup" id="tabSignup">Create account</button>
+            </div>
+            <h2 id="authTitle">Welcome back</h2>
+            <p class="auth-sub" id="authSub">Sign in to open your workspace.</p>
+            <div class="auth-note" id="firstRunNote" hidden>
+                <b>First time here?</b> Create the account for this computer. Anything you've already saved in Reqly moves into it.
+            </div>
+
+            <form id="authForm" novalidate>
+                <div class="field signup-only">
+                    <label for="name">Name</label>
+                    <input id="name" name="name" autocomplete="name" placeholder="Ada Lovelace">
+                </div>
+                <div class="field">
+                    <label for="email">Email</label>
+                    <input id="email" name="email" type="email" autocomplete="email" placeholder="you@company.com" required>
+                </div>
+                <div class="field">
+                    <label for="password">Password <a href="#" class="signin-only" id="forgotLink">Forgot password?</a></label>
+                    <div class="pw">
+                        <input id="password" name="password" type="password" autocomplete="current-password" required>
+                        <button type="button" class="pw-toggle" id="pwToggle" aria-label="Show password" title="Show password">
+                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
+                        </button>
+                    </div>
+                    <div class="strength signup-only" aria-live="polite">
+                        <div class="strength-bar"><span id="strengthBar"></span></div>
+                        <span id="strengthText">Use at least 8 characters</span>
+                    </div>
+                </div>
+                <div class="field signup-only">
+                    <label for="password2">Confirm password</label>
+                    <input id="password2" name="password2" type="password" autocomplete="new-password">
+                </div>
+                <label class="check"><input type="checkbox" id="remember" checked> Keep me signed in for 30 days</label>
+                <div class="auth-error" id="authError" role="alert" aria-live="assertive"></div>
+                <button class="auth-submit" type="submit" id="authSubmit"><span>Sign in</span></button>
+                <p class="auth-legal signup-only">By creating an account you agree to the <a href="/terms" target="_blank">Terms of Use</a> and <a href="/privacy" target="_blank">Privacy Policy</a>.</p>
+            </form>
+        </div>
+        <footer class="auth-footer">
+            <a href="/privacy">Privacy</a>
+            <a href="/terms">Terms</a>
+            <a href="/licenses">Licenses</a>
+            <button type="button" id="authTheme" title="Switch theme">Theme</button>
+        </footer>
+    </section>
+</main>
+
+<div class="modal-overlay" id="forgotModal" role="dialog" aria-modal="true" aria-labelledby="forgotTitle">
+    <div class="modal">
+        <div class="modal-head"><h3 id="forgotTitle">Reset your password</h3></div>
+        <div class="modal-body">
+            <p>Your account lives only on this computer, so there's no reset email. Instead, start Reqly once with the reset option and it will print a temporary password:</p>
+            <pre class="snippet-code" id="resetCmd">./gradlew bootRun --args='--reqly.reset-password=you@company.com'</pre>
+            <p class="hint">Using the installed app on macOS: <code>/Applications/Reqly.app/Contents/MacOS/Reqly --reqly.reset-password=you@company.com</code>. Sign in with the temporary password, then change it under your account menu.</p>
+        </div>
+        <div class="modal-foot"><button class="btn btn-primary" id="forgotClose">Got it</button></div>
+    </div>
+</div>
+<script src="/js/login.js"></script>
+</body>
+</html>

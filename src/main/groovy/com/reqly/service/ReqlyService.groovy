@@ -6,6 +6,7 @@ import com.reqly.dto.*
 import com.reqly.entity.*
 import com.reqly.entity.Collection
 import com.reqly.repository.*
+import com.reqly.security.CurrentUser
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
@@ -36,31 +37,40 @@ class ReqlyService {
         this.csvReader = csvReader
     }
 
+    // --- Ownership: everything is scoped to the signed-in account; other accounts' ids look like "not found" ---
+
+    private static <T> T owned(T entity) {
+        if (entity?.owner?.id != CurrentUser.id()) throw new NoSuchElementException("Not found")
+        entity
+    }
+
+    Collection ownedCollection(Long id) { owned(collectionRepo.findById(id).orElseThrow()) }
+    ApiRequest ownedRequest(Long id) { owned(requestRepo.findById(id).orElseThrow()) }
+    Environment ownedEnvironment(Long id) { owned(envRepo.findById(id).orElseThrow()) }
+
     // --- Collections ---
 
     Collection createCollection(String name, String description, Long parentId) {
-        def col = new Collection(name: name, description: description)
-        if (parentId != null) {
-            col.parent = collectionRepo.findById(parentId).orElse(null)
-        }
+        def col = new Collection(name: name, description: description, owner: CurrentUser.get())
+        if (parentId != null) col.parent = ownedCollection(parentId)
         collectionRepo.save(col)
     }
 
     List<Collection> getRootCollections() {
-        collectionRepo.findByParentIsNullOrderBySortOrder()
+        collectionRepo.findByParentIsNullAndOwnerIdOrderBySortOrder(CurrentUser.id())
     }
 
     void deleteCollection(Long id) {
-        collectionRepo.deleteById(id)
+        collectionRepo.delete(ownedCollection(id))
     }
 
     @Transactional
     Collection updateCollection(Long id, Map<String, Object> body) {
-        def col = collectionRepo.findById(id).orElseThrow()
+        def col = ownedCollection(id)
         if (body.name) col.name = body.name as String
         if (body.containsKey("parentId")) {
             def parentId = body.parentId != null ? Long.valueOf(body.parentId.toString()) : null
-            def parent = parentId != null ? collectionRepo.findById(parentId).orElseThrow() : null
+            def parent = parentId != null ? ownedCollection(parentId) : null
             for (def p = parent; p != null; p = p.parent) {
                 if (p.id == col.id) throw new IllegalArgumentException("Cannot move a folder into itself")
             }
@@ -71,12 +81,12 @@ class ReqlyService {
 
     @Transactional
     Collection duplicateCollection(Long id) {
-        def src = collectionRepo.findById(id).orElseThrow()
+        def src = ownedCollection(id)
         copyCollection(src, src.parent, "${src.name} Copy")
     }
 
     private Collection copyCollection(Collection src, Collection parent, String name) {
-        def copy = collectionRepo.save(new Collection(name: name, description: src.description, parent: parent, sortOrder: src.sortOrder))
+        def copy = collectionRepo.save(new Collection(name: name, description: src.description, parent: parent, sortOrder: src.sortOrder, owner: src.owner))
         requestRepo.findByCollectionIdOrderBySortOrder(src.id).each { requestRepo.save(copyRequest(it, copy, it.name)) }
         collectionRepo.findByParentIdOrderBySortOrder(src.id).each { copyCollection(it, copy, it.name) }
         copy
@@ -86,11 +96,11 @@ class ReqlyService {
     @Transactional(readOnly = true)
     Map<String, Object> getTree() {
         def byOrder = { a, b -> (a.sortOrder ?: 0) <=> (b.sortOrder ?: 0) ?: a.id <=> b.id }
-        def nodes = collectionRepo.findAll().sort(byOrder).collectEntries { c ->
+        def nodes = collectionRepo.findByOwnerId(CurrentUser.id()).sort(byOrder).collectEntries { c ->
             [c.id, [id: c.id, name: c.name, parentId: c.parent?.id, folders: [], requests: []]]
         }
         def unsorted = []
-        requestRepo.findAll().sort(byOrder).each { r ->
+        requestRepo.findByOwnerId(CurrentUser.id()).sort(byOrder).each { r ->
             def summary = [id: r.id, name: r.name, method: r.method, url: r.url]
             def colId = r.collection?.id
             colId != null && nodes[colId] ? nodes[colId].requests << summary : unsorted << summary
@@ -103,9 +113,9 @@ class ReqlyService {
     // --- Requests ---
 
     ApiRequest saveRequest(RequestDto dto) {
-        def req = dto.id != null
-                ? requestRepo.findById(dto.id).orElse(new ApiRequest())
-                : new ApiRequest()
+        // An id that no longer exists (deleted elsewhere) saves as a new request
+        def existing = dto.id != null ? requestRepo.findById(dto.id).orElse(null) : null
+        def req = existing != null ? owned(existing) : new ApiRequest(owner: CurrentUser.get())
 
         req.name = dto.name ?: "${dto.method} ${dto.url}"
         req.method = normalizeMethod(dto.method)
@@ -126,10 +136,10 @@ class ReqlyService {
         } catch (ignored) {}
 
         if (dto.collectionId != null) {
-            req.collection = collectionRepo.findById(dto.collectionId).orElse(null)
+            req.collection = ownedCollection(dto.collectionId)
         }
         if (dto.environmentId != null) {
-            req.environment = envRepo.findById(dto.environmentId).orElse(null)
+            req.environment = envRepo.findById(dto.environmentId).filter { it.owner?.id == CurrentUser.id() }.orElse(null)
         }
 
         requestRepo.save(req)
@@ -142,28 +152,27 @@ class ReqlyService {
     }
 
     RequestDto getRequestDto(Long id) {
-        def req = requestRepo.findById(id).orElseThrow()
-        toDto(req)
+        toDto(ownedRequest(id))
     }
 
     List<RequestDto> getRequestsByCollection(Long collectionId) {
         def requests = collectionId != null
-                ? requestRepo.findByCollectionIdOrderBySortOrder(collectionId)
-                : requestRepo.findByCollectionIsNullOrderBySortOrder()
+                ? requestRepo.findByCollectionIdOrderBySortOrder(ownedCollection(collectionId).id)
+                : requestRepo.findByCollectionIsNullAndOwnerIdOrderBySortOrder(CurrentUser.id())
         requests.collect { toDto(it) }
     }
 
     void deleteRequest(Long id) {
-        requestRepo.deleteById(id)
+        requestRepo.delete(ownedRequest(id))
     }
 
     @Transactional
     ApiRequest updateRequest(Long id, Map<String, Object> body) {
-        def req = requestRepo.findById(id).orElseThrow()
+        def req = ownedRequest(id)
         if (body.name) req.name = body.name as String
         if (body.containsKey("collectionId")) {
             req.collection = body.collectionId != null
-                    ? collectionRepo.findById(Long.valueOf(body.collectionId.toString())).orElseThrow()
+                    ? ownedCollection(Long.valueOf(body.collectionId.toString()))
                     : null
         }
         requestRepo.save(req)
@@ -173,20 +182,24 @@ class ReqlyService {
     @Transactional
     void reorderRequests(List<Long> ids) {
         ids.eachWithIndex { Long id, int i ->
-            requestRepo.findById(id).ifPresent { it.sortOrder = i; requestRepo.save(it) }
+            def r = ownedRequest(id)
+            r.sortOrder = i
+            requestRepo.save(r)
         }
     }
 
     @Transactional
     void reorderCollections(List<Long> ids) {
         ids.eachWithIndex { Long id, int i ->
-            collectionRepo.findById(id).ifPresent { it.sortOrder = i; collectionRepo.save(it) }
+            def c = ownedCollection(id)
+            c.sortOrder = i
+            collectionRepo.save(c)
         }
     }
 
     @Transactional
     ApiRequest duplicateRequest(Long id) {
-        def src = requestRepo.findById(id).orElseThrow()
+        def src = ownedRequest(id)
         requestRepo.save(copyRequest(src, src.collection, "${src.name} Copy"))
     }
 
@@ -195,7 +208,7 @@ class ReqlyService {
             name: name, method: src.method, url: src.url, headers: src.headers, params: src.params,
             body: src.body, bodyType: src.bodyType, authType: src.authType, authConfig: src.authConfig,
             testScript: src.testScript, preRequestScript: src.preRequestScript, postResponseScript: src.postResponseScript, disabledItems: src.disabledItems, settings: src.settings,
-            collection: target, environment: src.environment, sortOrder: src.sortOrder
+            collection: target, environment: src.environment, sortOrder: src.sortOrder, owner: src.owner
         )
     }
 
@@ -219,7 +232,7 @@ class ReqlyService {
     private void saveCaptures(ExecutionResult result, Long environmentId) {
         def ok = result.captures?.findAll { it.ok }
         if (!ok || environmentId == null) return
-        envRepo.findById(environmentId).ifPresent { env ->
+        envRepo.findById(environmentId).filter { it.owner?.id == CurrentUser.id() }.ifPresent { env ->
             Map<String, String> vars = [:]
             try { if (env.variables) vars = objectMapper.readValue(env.variables, new TypeReference<LinkedHashMap<String, String>>() {}) } catch (ignored) {}
             ok.each { vars[it.name as String] = it.value as String }
@@ -264,7 +277,8 @@ class ReqlyService {
     // --- Environments ---
 
     Environment saveEnvironment(Long id, String name, String variables, String secrets = null) {
-        def env = id != null ? envRepo.findById(id).orElse(new Environment()) : new Environment()
+        def existing = id != null ? envRepo.findById(id).orElse(null) : null
+        def env = existing != null ? owned(existing) : new Environment(owner: CurrentUser.get())
         env.name = name
         env.variables = variables
         if (secrets != null) env.secrets = secrets
@@ -272,32 +286,33 @@ class ReqlyService {
     }
 
     List<Environment> getAllEnvironments() {
-        envRepo.findAll()
+        envRepo.findByOwnerIdOrderById(CurrentUser.id())
     }
 
     void deleteEnvironment(Long id) {
-        envRepo.deleteById(id)
+        envRepo.delete(ownedEnvironment(id))
     }
 
     // --- History ---
 
     List<RequestHistory> getRecentHistory() {
-        historyRepo.findTop100ByOrderByExecutedAtDesc()
+        historyRepo.findTop100ByOwnerIdOrderByExecutedAtDesc(CurrentUser.id())
     }
 
     List<RequestHistory> getRequestHistory(Long requestId) {
-        historyRepo.findByApiRequestIdOrderByExecutedAtDesc(requestId).take(20)
+        historyRepo.findByApiRequestIdOrderByExecutedAtDesc(ownedRequest(requestId).id).take(20)
     }
 
+    @Transactional
     void clearHistory() {
-        historyRepo.deleteAll()
+        historyRepo.deleteByOwner(CurrentUser.id())
     }
 
     // --- Helpers ---
 
     private Map<String, String> getEnvironmentVariables(Long envId) {
         if (envId == null) return [:]
-        envRepo.findById(envId).map { env ->
+        envRepo.findById(envId).filter { it.owner?.id == CurrentUser.id() }.map { env ->
             try {
                 objectMapper.readValue(env.variables, new TypeReference<Map<String, String>>() {})
             } catch (Exception e) {
@@ -323,11 +338,12 @@ class ReqlyService {
                 responseHeaders: result.responseHeaders != null ? objectMapper.writeValueAsString(result.responseHeaders) : null,
                 responseTimeMs: result.responseTimeMs,
                 responseSizeBytes: result.responseSizeBytes,
-                testResults: result.testResults != null ? objectMapper.writeValueAsString(result.testResults) : null
+                testResults: result.testResults != null ? objectMapper.writeValueAsString(result.testResults) : null,
+                owner: CurrentUser.get()
             )
 
             if (dto.id != null) {
-                requestRepo.findById(dto.id).ifPresent { history.apiRequest = it }
+                requestRepo.findById(dto.id).filter { it.owner?.id == CurrentUser.id() }.ifPresent { history.apiRequest = it }
             }
             historyRepo.save(history)
         } catch (ignored) {}
