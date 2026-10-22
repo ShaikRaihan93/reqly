@@ -121,6 +121,7 @@ class ReqlyService {
             if (dto.params != null) req.params = objectMapper.writeValueAsString(dto.params)
             if (dto.authConfig != null) req.authConfig = objectMapper.writeValueAsString(dto.authConfig)
             req.disabledItems = objectMapper.writeValueAsString([headers: dto.disabledHeaders ?: [:], params: dto.disabledParams ?: [:]])
+            req.settings = dto.settings ? objectMapper.writeValueAsString(dto.settings) : null
         } catch (ignored) {}
 
         if (dto.collectionId != null) {
@@ -177,16 +178,16 @@ class ReqlyService {
         new ApiRequest(
             name: name, method: src.method, url: src.url, headers: src.headers, params: src.params,
             body: src.body, bodyType: src.bodyType, authType: src.authType, authConfig: src.authConfig,
-            testScript: src.testScript, preRequestScript: src.preRequestScript, disabledItems: src.disabledItems,
+            testScript: src.testScript, preRequestScript: src.preRequestScript, disabledItems: src.disabledItems, settings: src.settings,
             collection: target, environment: src.environment, sortOrder: src.sortOrder
         )
     }
 
     // --- Execution ---
 
-    ExecutionResult executeRequest(RequestDto dto, Long environmentId) {
+    ExecutionResult executeRequest(RequestDto dto, Long environmentId, Map<String, Map> files = [:]) {
         def vars = getEnvironmentVariables(environmentId)
-        def result = executor.execute(dto, vars)
+        def result = executor.execute(dto, vars, files)
 
         if (dto.testScript?.trim()) {
             result.testResults = testRunner.runTests(dto.testScript, result)
@@ -331,6 +332,7 @@ class ReqlyService {
             if (req.headers) dto.headers = objectMapper.readValue(req.headers, new TypeReference<Map<String, String>>() {})
             if (req.params) dto.params = objectMapper.readValue(req.params, new TypeReference<Map<String, String>>() {})
             if (req.authConfig) dto.authConfig = objectMapper.readValue(req.authConfig, new TypeReference<Map<String, String>>() {})
+            if (req.settings) dto.settings = objectMapper.readValue(req.settings, new TypeReference<Map<String, Object>>() {})
             if (req.disabledItems) {
                 def disabled = objectMapper.readValue(req.disabledItems, new TypeReference<Map<String, Map<String, String>>>() {})
                 dto.disabledHeaders = disabled.headers

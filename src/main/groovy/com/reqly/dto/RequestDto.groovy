@@ -15,6 +15,8 @@ class RequestDto {
     Map<String, String> authConfig
     String testScript
     String preRequestScript
+    /** Per-request options: timeoutMs, insecure (ignore SSL errors), followRedirects */
+    Map<String, Object> settings
     Long collectionId
     Long environmentId
 }

@@ -45,6 +45,10 @@ class ApiRequest {
     @Column(columnDefinition = "TEXT", name = "pre_request_script")
     String preRequestScript
 
+    /** JSON: {timeoutMs, insecure, followRedirects} */
+    @Column(columnDefinition = "TEXT")
+    String settings
+
     // Unchecked params/headers, kept so they survive a save but are never sent
     @Column(columnDefinition = "TEXT", name = "disabled_items")
     String disabledItems

@@ -22,19 +22,18 @@ class RequestExecutor {
 
     private static final Logger log = LoggerFactory.getLogger(RequestExecutor)
 
-    private final HttpClient httpClient
-    private final HttpClient insecureClient
+    /** One client per (ignore SSL, follow redirects) combination, created on first use */
+    private final Map<String, HttpClient> clients = new ConcurrentHashMap<>()
 
-    RequestExecutor() {
-        this.httpClient = HttpClient.newBuilder()
-                .version(HttpClient.Version.HTTP_1_1)
-                .followRedirects(HttpClient.Redirect.NORMAL)
-                .connectTimeout(Duration.ofSeconds(30))
-                .build()
-        this.insecureClient = createInsecureClient()
+    private HttpClient client(boolean insecure, boolean followRedirects) {
+        clients.computeIfAbsent("${insecure}/${followRedirects}".toString()) { buildClient(insecure, followRedirects) }
     }
 
-    ExecutionResult execute(RequestDto request, Map<String, String> variables) {
+    /**
+     * @param files uploaded file parts for form-data bodies, keyed by the row index in the form-data rows
+     *              (each value: [name: String, contentType: String, bytes: byte[]])
+     */
+    ExecutionResult execute(RequestDto request, Map<String, String> variables, Map<String, Map> files = [:]) {
         def result = new ExecutionResult()
         long startTime = System.currentTimeMillis()
         String url = request.url
@@ -45,7 +44,18 @@ class RequestExecutor {
 
             // Headers
             def headers = request.headers != null ? new HashMap<>(request.headers) : [:]
-            boolean insecure = "true" == headers.remove("_insecure")
+            def settings = request.settings ?: [:]
+            boolean insecure = "true" == headers.remove("_insecure") || settings.insecure == true
+            boolean followRedirects = settings.followRedirects != false
+            long timeoutMs = settings.timeoutMs ? (settings.timeoutMs as long) : 60_000L
+
+            // form-data needs its own Content-Type with the multipart boundary
+            String boundary = null
+            if (request.bodyType == "form-data") {
+                boundary = "----ReqlyBoundary" + UUID.randomUUID().toString().replace("-", "")
+                headers.removeAll { it.key.equalsIgnoreCase("Content-Type") }
+                headers["Content-Type"] = "multipart/form-data; boundary=${boundary}".toString()
+            }
 
             // Auto-set Content-Type from bodyType if not explicitly provided and there's a body
             if (request.body && !headers.any { it.key.equalsIgnoreCase("Content-Type") }) {
@@ -71,13 +81,19 @@ class RequestExecutor {
             }
 
             // Body
-            def body = request.body != null ? substituteVariables(request.body, variables) : null
-            def bodyPublisher = body != null
-                    ? HttpRequest.BodyPublishers.ofString(body)
-                    : HttpRequest.BodyPublishers.noBody()
+            String body
+            HttpRequest.BodyPublisher bodyPublisher
+            if (boundary != null) {
+                byte[] bytes = multipartBody(request.body, files ?: [:], variables, boundary)
+                body = "(multipart form-data, ${bytes.length} bytes)".toString()
+                bodyPublisher = HttpRequest.BodyPublishers.ofByteArray(bytes)
+            } else {
+                body = request.body != null ? substituteVariables(request.body, variables) : null
+                bodyPublisher = body != null ? HttpRequest.BodyPublishers.ofString(body) : HttpRequest.BodyPublishers.noBody()
+            }
 
             builder.method(request.method.toUpperCase(), bodyPublisher)
-            builder.timeout(Duration.ofSeconds(60))
+            builder.timeout(Duration.ofMillis(Math.max(1000L, timeoutMs)))
 
             def httpRequest = builder.build()
             log.info("=== Outgoing Request ===")
@@ -88,7 +104,7 @@ class RequestExecutor {
             log.info("BodyType: {} | Insecure: {}", request.bodyType, insecure)
             log.info("========================")
 
-            def client = insecure ? insecureClient : httpClient
+            def client = client(insecure, followRedirects)
             def response = client.send(httpRequest, HttpResponse.BodyHandlers.ofString())
 
             long elapsed = System.currentTimeMillis() - startTime
@@ -124,7 +140,7 @@ class RequestExecutor {
         def has = { Class c -> causes.any { c.isInstance(it) } }
         if (has(UnknownHostException)) return "Host not found: ${detail}. Check the URL and your network/VPN."
         if (has(java.net.http.HttpConnectTimeoutException)) return "Timed out while connecting. The server may be down or blocked by a firewall/VPN."
-        if (has(java.net.http.HttpTimeoutException)) return "No response within 60 seconds."
+        if (has(java.net.http.HttpTimeoutException)) return "No response before the timeout. Raise it in the request's Settings tab if the server is just slow."
         if (has(ConnectException)) return "Could not connect to ${hostOf(url)}. Check the host and port, that the server is running, and your network/VPN."
         if (has(SSLException)) return "SSL/TLS error: ${detail}. For self-signed certificates, add the header _insecure: true."
         if (e instanceof IllegalArgumentException) return "Invalid URL: ${detail}"
@@ -219,8 +235,12 @@ class RequestExecutor {
         result
     }
 
-    private HttpClient createInsecureClient() {
-        try {
+    private static HttpClient buildClient(boolean insecure, boolean followRedirects) {
+        def b = HttpClient.newBuilder()
+                .version(HttpClient.Version.HTTP_1_1)
+                .followRedirects(followRedirects ? HttpClient.Redirect.NORMAL : HttpClient.Redirect.NEVER)
+                .connectTimeout(Duration.ofSeconds(30))
+        if (insecure) {
             def trustAll = [
                 new X509TrustManager() {
                     X509Certificate[] getAcceptedIssuers() { new X509Certificate[0] }
@@ -230,14 +250,35 @@ class RequestExecutor {
             ] as TrustManager[]
             def sc = SSLContext.getInstance("TLS")
             sc.init(null, trustAll, new java.security.SecureRandom())
-            HttpClient.newBuilder()
-                    .version(HttpClient.Version.HTTP_1_1)
-                    .sslContext(sc)
-                    .followRedirects(HttpClient.Redirect.NORMAL)
-                    .connectTimeout(Duration.ofSeconds(30))
-                    .build()
-        } catch (Exception e) {
-            httpClient
+            b.sslContext(sc)
         }
+        b.build()
+    }
+
+    /** form-data rows are stored as a JSON array of {key, value, type: text|file, enabled, fileName}. */
+    private byte[] multipartBody(String rowsJson, Map<String, Map> files, Map<String, String> variables, String boundary) {
+        List<Map> rows = []
+        try { if (rowsJson) rows = new groovy.json.JsonSlurper().parseText(rowsJson) as List<Map> } catch (ignored) {}
+        def out = new ByteArrayOutputStream()
+        def write = { String s -> out.write(s.getBytes(StandardCharsets.UTF_8)) }
+        def quote = { String s -> (s ?: "").replace('"', '%22').replace("\r", "").replace("\n", "") }
+        rows.eachWithIndex { Map row, int i ->
+            if (row.enabled == false || !row.key) return
+            def name = substituteVariables(row.key as String, variables)
+            if (row.type == "file") {
+                def f = files[String.valueOf(i)]
+                if (f == null) return
+                write("--${boundary}\r\nContent-Disposition: form-data; name=\"${quote(name)}\"; filename=\"${quote(f.name as String)}\"\r\n")
+                write("Content-Type: ${f.contentType ?: 'application/octet-stream'}\r\n\r\n")
+                out.write(f.bytes as byte[])
+                write("\r\n")
+            } else {
+                write("--${boundary}\r\nContent-Disposition: form-data; name=\"${quote(name)}\"\r\n\r\n")
+                write(substituteVariables((row.value ?: "") as String, variables))
+                write("\r\n")
+            }
+        }
+        write("--${boundary}--\r\n")
+        out.toByteArray()
     }
 }

@@ -123,6 +123,7 @@
                         <div class="tab" data-panel="reqBody" title="Request payload">Body <span class="mark" id="markBody" style="display:none"></span></div>
                         <div class="tab" data-panel="reqTests" title="Assertions checked against the response">Tests <span class="count" id="cntTests"></span></div>
                         <div class="tab" data-panel="reqBulk" title="Load-test this request or run it once per CSV row">Bulk / CSV</div>
+                        <div class="tab" data-panel="reqSettings" title="Timeout, SSL verification and redirects for this request">Settings <span class="mark" id="markSettings" style="display:none"></span></div>
                     </div>
                     <div class="tab-content">
                         <div class="tab-panel active" id="reqParams">
@@ -155,6 +156,8 @@
                                     <label title="Raw JSON. Content-Type: application/json is added unless you set one"><input type="radio" name="bodyType" value="raw" checked> JSON</label>
                                     <label title="Plain text. Content-Type: text/plain is added unless you set one"><input type="radio" name="bodyType" value="text"> Text</label>
                                     <label title="Key/value form fields, URL-encoded like an HTML form"><input type="radio" name="bodyType" value="x-www-form-urlencoded"> x-www-form-urlencoded</label>
+                                    <label title="multipart/form-data: text fields and file uploads"><input type="radio" name="bodyType" value="form-data"> form-data</label>
+                                    <label title="GraphQL query with optional variables, sent as JSON"><input type="radio" name="bodyType" value="graphql"> GraphQL</label>
                                 </div>
                                 <span class="spacer"></span>
                                 <button class="btn btn-ghost btn-sm" id="beautifyBtn" onclick="beautifyBody()" title="Format the JSON body with indentation">Beautify</button>
@@ -162,6 +165,11 @@
                             <div class="body-none" id="bodyNone">This request does not have a body</div>
                             <textarea class="code" id="bodyEditor" spellcheck="false" placeholder='{ "key": "value" }'></textarea>
                             <div class="kv-editor" id="formEditor"></div>
+                            <div id="formDataEditor" class="fd-editor"></div>
+                            <div id="gqlEditor" class="gql-editor">
+                                <div class="gql-col"><label class="field-label">Query</label><textarea class="code" id="gqlQuery" spellcheck="false" placeholder="query GetUser($id: ID!) {&#10;  user(id: $id) { id name }&#10;}"></textarea></div>
+                                <div class="gql-col"><label class="field-label">Variables <span class="muted">· JSON</span></label><textarea class="code" id="gqlVars" spellcheck="false" placeholder='{ "id": "123" }'></textarea></div>
+                            </div>
                         </div>
                         <div class="tab-panel" id="reqTests">
                             <div class="tests-layout">
@@ -180,6 +188,22 @@
                                     <div class="snippet" data-snippet="json.data.token -> token">JSON value → {{token}}</div>
                                     <div class="snippet" data-snippet="header.X-Request-Id -> requestId">Header → {{requestId}}</div>
                                     <p class="hint" style="margin-top:8px"><code>source -> name</code> saves a response value into the active environment, so the next request can use <code>{{name}}</code>. Lines starting with <code>//</code> are ignored.</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="tab-panel" id="reqSettings">
+                            <div class="settings-grid">
+                                <div class="setting">
+                                    <div><div class="setting-title">Request timeout</div><div class="hint">Give up if the full response hasn't arrived by then.</div></div>
+                                    <div class="setting-ctl"><input type="number" class="input" id="setTimeout" min="1" max="3600" placeholder="60" style="width:96px"><span class="muted">seconds</span></div>
+                                </div>
+                                <div class="setting">
+                                    <div><div class="setting-title">Ignore SSL certificate errors</div><div class="hint">For self-signed or expired certificates on dev/test servers. Never use this for production traffic you care about.</div></div>
+                                    <label class="switch"><input type="checkbox" id="setInsecure"><span></span></label>
+                                </div>
+                                <div class="setting">
+                                    <div><div class="setting-title">Follow redirects</div><div class="hint">Turn off to see the 3xx response and its Location header.</div></div>
+                                    <label class="switch"><input type="checkbox" id="setRedirects" checked><span></span></label>
                                 </div>
                             </div>
                         </div>
@@ -326,6 +350,28 @@
                 <span class="spacer"></span>
                 <button class="btn" onclick="closeModal('saveModal')">Cancel</button>
                 <button class="btn btn-primary" id="saveModalOk">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Code snippets -->
+    <div class="modal-overlay" id="snippetModal">
+        <div class="modal wide">
+            <div class="modal-head"><h3>Code snippet</h3><button class="icon-btn" onclick="closeModal('snippetModal')"><svg class="i"><use href="#i-x"/></svg></button></div>
+            <div class="modal-body">
+                <div class="seg-tabs tabs" id="snippetTabs">
+                    <div class="tab active" data-lang="curl">cURL</div>
+                    <div class="tab" data-lang="fetch">JavaScript · fetch</div>
+                    <div class="tab" data-lang="python">Python · requests</div>
+                    <div class="tab" data-lang="java">Java · HttpClient</div>
+                </div>
+                <pre class="snippet-code" id="snippetCode"></pre>
+            </div>
+            <div class="modal-foot">
+                <label class="hint" style="display:flex;gap:6px;align-items:center;cursor:pointer" title="Replace {{variables}} with values from the active environment"><input type="checkbox" id="snippetResolve" checked> Fill in environment variables</label>
+                <span class="spacer"></span>
+                <button class="btn" onclick="closeModal('snippetModal')">Close</button>
+                <button class="btn btn-primary" onclick="copySnippet()"><svg class="i"><use href="#i-copy"/></svg>Copy</button>
             </div>
         </div>
     </div>

@@ -361,7 +361,9 @@ function setBodyType(type) {
     $('bodyNone').style.display = t === 'none' ? '' : 'none';
     $('bodyEditor').style.display = t === 'raw' || t === 'text' ? '' : 'none';
     $('formEditor').style.display = t === 'x-www-form-urlencoded' ? '' : 'none';
-    $('beautifyBtn').style.display = t === 'raw' ? '' : 'none';
+    $('formDataEditor').style.display = t === 'form-data' ? '' : 'none';
+    $('gqlEditor').style.display = t === 'graphql' ? '' : 'none';
+    $('beautifyBtn').style.display = t === 'raw' || t === 'graphql' ? '' : 'none';
     $('bodyEditor').placeholder = t === 'raw' ? '{ "key": "value" }' : 'Plain text body';
 }
 
@@ -407,8 +409,12 @@ function buildRequestDto() {
         disabledParams: rowsToMap(params, false),
         headers: rowsToMap(headers, true),
         disabledHeaders: rowsToMap(headers, false),
-        body: bodyType === 'x-www-form-urlencoded' ? (encodeForm(getKv('formEditor')) || null) : ($('bodyEditor').value || null),
+        body: bodyType === 'x-www-form-urlencoded' ? (encodeForm(getKv('formEditor')) || null)
+            : bodyType === 'form-data' ? (getFormData().length ? JSON.stringify(getFormData()) : null)
+            : bodyType === 'graphql' ? (($('gqlQuery').value || $('gqlVars').value) ? JSON.stringify({ query: $('gqlQuery').value, variables: $('gqlVars').value }) : null)
+            : ($('bodyEditor').value || null),
         bodyType,
+        settings: getSettings(),
         authType: auth.type,
         authConfig: auth.config,
         testScript: $('testEditor').value || null,
@@ -416,12 +422,19 @@ function buildRequestDto() {
     };
 }
 
-const AUTO_CONTENT_TYPE = { raw: 'application/json', text: 'text/plain', 'x-www-form-urlencoded': 'application/x-www-form-urlencoded' };
+const AUTO_CONTENT_TYPE = { raw: 'application/json', text: 'text/plain', 'x-www-form-urlencoded': 'application/x-www-form-urlencoded', graphql: 'application/json' };
 
 /** What actually goes over the wire: no body for "none", plus an automatic Content-Type like Postman adds. */
 function prepareForSend(dto) {
     const out = { ...dto, headers: { ...dto.headers } };
     if (dto.bodyType === 'none') out.body = null;
+    if (dto.bodyType === 'graphql' && dto.body) {
+        // Stored as {query, variables-as-text}; sent as the standard GraphQL JSON payload
+        const g = JSON.parse(dto.body);
+        let variables;
+        try { variables = g.variables?.trim() ? JSON.parse(g.variables) : undefined; } catch (e) { variables = undefined; }
+        out.body = JSON.stringify(variables === undefined ? { query: g.query } : { query: g.query, variables });
+    }
     const ct = AUTO_CONTENT_TYPE[dto.bodyType];
     if (out.body && ct && !headerValue(out.headers, 'content-type')) out.headers['Content-Type'] = ct;
     return out;
@@ -442,13 +455,16 @@ function loadRequestToUI(dto) {
     setKv('headersEditor', [...mapToRows(dto.headers, true), ...mapToRows(dto.disabledHeaders, false)], true);
     const bodyType = dto.bodyType || (dto.body ? 'raw' : 'none');
     setBodyType(bodyType);
-    if (bodyType === 'x-www-form-urlencoded') {
-        $('bodyEditor').value = '';
-        setKv('formEditor', parseQuery(dto.body || ''), true);
-    } else {
-        $('bodyEditor').value = dto.body || '';
-        setKv('formEditor', [], true);
-    }
+    $('bodyEditor').value = ['raw', 'text', 'none'].includes(bodyType) ? dto.body || '' : '';
+    setKv('formEditor', bodyType === 'x-www-form-urlencoded' ? parseQuery(dto.body || '') : [], true);
+    let fd = [];
+    if (bodyType === 'form-data') { try { fd = JSON.parse(dto.body || '[]'); } catch (e) { fd = []; } }
+    setFormData(fd);
+    let gql = {};
+    if (bodyType === 'graphql') { try { gql = JSON.parse(dto.body || '{}'); } catch (e) { gql = {}; } }
+    $('gqlQuery').value = gql.query || '';
+    $('gqlVars').value = gql.variables || '';
+    setSettings(dto.settings);
     $('authTypeSelect').value = dto.authType || '';
     renderAuthFields(dto.authType, dto.authConfig || {});
     $('testEditor').value = dto.testScript || '';
@@ -469,15 +485,122 @@ function updateIndicators() {
     $('cntTests').textContent = tests || '';
     $('markAuth').style.display = $('authTypeSelect').value ? '' : 'none';
     const bt = currentBodyType();
-    const hasBody = bt === 'x-www-form-urlencoded' ? getKv('formEditor').length > 0 : bt !== 'none' && $('bodyEditor').value.trim() !== '';
+    const hasBody = bt === 'x-www-form-urlencoded' ? getKv('formEditor').length > 0
+        : bt === 'form-data' ? getFormData().length > 0
+        : bt === 'graphql' ? $('gqlQuery').value.trim() !== ''
+        : bt !== 'none' && $('bodyEditor').value.trim() !== '';
+    const st = getSettings();
+    $('markSettings').style.display = st ? '' : 'none';
     $('markBody').style.display = hasBody ? '' : 'none';
     const ct = AUTO_CONTENT_TYPE[bt];
     const hasCt = getKv('headersEditor').some(r => r.enabled !== false && r.key.toLowerCase() === 'content-type');
     $('autoHeaderHint').innerHTML = hasBody && ct && !hasCt ? `· auto <code>Content-Type: ${ct}</code>` : '';
 }
 
+// ---------- Request settings ----------
+/** null when everything is default, so untouched requests don't store settings */
+function getSettings() {
+    const secs = parseFloat($('setTimeout').value);
+    const s = {};
+    if (secs > 0) s.timeoutMs = Math.round(secs * 1000);
+    if ($('setInsecure').checked) s.insecure = true;
+    if (!$('setRedirects').checked) s.followRedirects = false;
+    return Object.keys(s).length ? s : null;
+}
+function setSettings(st) {
+    st = st || {};
+    $('setTimeout').value = st.timeoutMs ? st.timeoutMs / 1000 : '';
+    $('setInsecure').checked = !!st.insecure;
+    $('setRedirects').checked = st.followRedirects !== false;
+}
+
+// ---------- form-data editor (text fields + files) ----------
+// File objects can't be saved; they live on the tab until it's closed or the page reloads.
+function fdFiles() { const t = activeTab(); if (t && !t.files) t.files = {}; return t?.files || {}; }
+
+function setFormData(rows) {
+    const el = $('formDataEditor');
+    el.innerHTML = `<table class="kv-table fd-table"><thead><tr><th class="col-check"></th><th>Key</th><th class="col-type">Type</th><th>Value</th><th class="col-del"></th></tr></thead><tbody></tbody></table>`;
+    rows.forEach(r => appendFormDataRow(r));
+    appendFormDataRow(null);
+}
+
+function appendFormDataRow(row) {
+    const tbody = $('formDataEditor').querySelector('tbody');
+    const tr = document.createElement('tr');
+    const isFile = row?.type === 'file';
+    tr.className = !row ? 'placeholder' : row.enabled === false ? 'disabled' : '';
+    tr.innerHTML = `<td class="col-check"><input type="checkbox" ${!row || row.enabled !== false ? 'checked' : ''} title="Include in the request"></td>
+        <td><input type="text" data-k spellcheck="false" placeholder="${row ? '' : 'Key'}" value="${esc(row?.key ?? '')}"></td>
+        <td class="col-type"><select class="fd-type" title="Text field or file upload"><option value="text"${isFile ? '' : ' selected'}>Text</option><option value="file"${isFile ? ' selected' : ''}>File</option></select></td>
+        <td class="fd-val">${fdValueCell(row)}</td>
+        <td class="col-del"><button class="icon-btn row-del" title="Remove">${icon('x')}</button></td>`;
+    tbody.appendChild(tr);
+}
+
+function fdValueCell(row) {
+    if (row?.type !== 'file') return `<input type="text" data-v spellcheck="false" placeholder="${row ? '' : 'Value'}" value="${esc(row?.value ?? '')}">`;
+    const idx = row._idx;
+    const f = idx != null ? fdFiles()[idx] : null;
+    const name = f?.name || row.fileName;
+    return `<label class="fd-file${f ? ' ready' : name ? ' missing' : ''}" title="${f ? 'Click to choose a different file' : name ? 'Files are not saved. Choose it again to send it' : 'Choose a file'}">${icon('file')}<span>${esc(name || 'Choose file…')}</span><input type="file" hidden></label>`;
+}
+
+function getFormData() {
+    const el = $('formDataEditor');
+    if (!el) return [];
+    return [...el.querySelectorAll('tbody tr:not(.placeholder)')].map(tr => {
+        const type = tr.querySelector('.fd-type').value;
+        const row = { key: tr.querySelector('[data-k]').value, type, enabled: tr.querySelector('input[type=checkbox]').checked };
+        if (type === 'file') row.fileName = tr.querySelector('.fd-file span')?.textContent.replace('Choose file…', '') || '';
+        else row.value = tr.querySelector('[data-v]')?.value || '';
+        return row;
+    }).filter(r => r.key || r.value || r.fileName);
+}
+
+function initFormDataEditor() {
+    const el = $('formDataEditor');
+    const rowIndex = tr => [...el.querySelectorAll('tbody tr:not(.placeholder)')].indexOf(tr);
+    const changed = () => { markDirty(); updateIndicators(); };
+    el.addEventListener('input', e => {
+        const tr = e.target.closest('tr');
+        if (tr?.classList.contains('placeholder') && e.target.matches('input[type=text]')) {
+            tr.classList.remove('placeholder');
+            tr.querySelectorAll('input[type=text]').forEach(i => { i.placeholder = ''; });
+            appendFormDataRow(null);
+        }
+        changed();
+    });
+    el.addEventListener('change', e => {
+        const tr = e.target.closest('tr');
+        if (e.target.matches('input[type=checkbox]')) tr.classList.toggle('disabled', !e.target.checked);
+        if (e.target.matches('.fd-type')) {
+            if (tr.classList.contains('placeholder')) { tr.classList.remove('placeholder'); appendFormDataRow(null); }
+            tr.querySelector('.fd-val').innerHTML = fdValueCell({ type: e.target.value, _idx: rowIndex(tr) });
+        }
+        if (e.target.matches('.fd-file input[type=file]') && e.target.files[0]) {
+            const idx = rowIndex(tr);
+            fdFiles()[idx] = e.target.files[0];
+            tr.querySelector('.fd-val').innerHTML = fdValueCell({ type: 'file', _idx: idx });
+        }
+        changed();
+    });
+    el.addEventListener('click', e => {
+        const del = e.target.closest('.row-del');
+        if (!del) return;
+        const tr = del.closest('tr');
+        const idx = rowIndex(tr);
+        // keep file slots aligned with row positions
+        const files = fdFiles(), next = {};
+        Object.entries(files).forEach(([k, f]) => { const i = +k; if (i < idx) next[i] = f; else if (i > idx) next[i - 1] = f; });
+        activeTab().files = next;
+        tr.remove();
+        changed();
+    });
+}
+
 function beautifyBody() {
-    const ed = $('bodyEditor');
+    const ed = currentBodyType() === 'graphql' ? $('gqlVars') : $('bodyEditor');
     try {
         ed.value = JSON.stringify(JSON.parse(ed.value), null, 2);
         markDirty();
@@ -704,7 +827,7 @@ async function sendRequest() {
     setSending(true);
     showResponseLoading();
     try {
-        const result = await api('POST', '/api/execute' + envQuery(), prepareForSend(dto), { signal: ctrl.signal });
+        const result = await executeWithFiles(dto, tab, ctrl.signal);
         tab.result = result;
         const ok = result.success && result.statusCode < 400;
         recordTelemetry(ok);
@@ -739,6 +862,23 @@ async function sendRequest() {
         tab.inFlight = null;
         if (tab.id === state.activeTabId) setSending(false);
     }
+}
+
+/** Uses the multipart endpoint when a form-data request has files attached. */
+async function executeWithFiles(dto, tab, signal) {
+    const wire = prepareForSend(dto);
+    const files = tab.files || {};
+    const rows = dto.bodyType === 'form-data' ? getFormData() : [];
+    const missing = rows.filter((r, i) => r.type === 'file' && r.enabled !== false && !files[i]).map(r => r.key);
+    if (missing.length) toast(`No file chosen for ${missing.join(', ')}; those fields are skipped`, true);
+    const attached = rows.map((r, i) => r.type === 'file' && r.enabled !== false && files[i] ? i : -1).filter(i => i >= 0);
+    if (!attached.length) return api('POST', '/api/execute' + envQuery(), wire, { signal });
+    const fd = new FormData();
+    fd.append('request', new Blob([JSON.stringify(wire)], { type: 'application/json' }));
+    attached.forEach(i => fd.append(`file:${i}`, files[i], files[i].name));
+    const res = await fetch('/api/execute/multipart' + envQuery(), { method: 'POST', body: fd, signal });
+    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+    return res.json();
 }
 
 async function sendBulk() {
@@ -1306,8 +1446,101 @@ function buildCurl(rawDto, vars = {}) {
     if (dto.authType === 'basic') parts.push(`--user ${shellQuote(sub(auth.username || '') + ':' + sub(auth.password || ''))}`);
     if (dto.authType === 'apikey') parts.push(`--header ${shellQuote((auth.key || 'X-API-Key') + ': ' + sub(auth.value || ''))}`);
     Object.entries(headers).forEach(([k, v]) => parts.push(`--header ${shellQuote(k + ': ' + sub(v))}`));
-    if (dto.body) parts.push(`--data-raw ${shellQuote(sub(dto.body))}`);
+    if (dto.bodyType === 'form-data' && dto.body) {
+        JSON.parse(dto.body).filter(r => r.enabled !== false && r.key).forEach(r => parts.push(`--form ${shellQuote(r.type === 'file' ? `${sub(r.key)}=@"${r.fileName || 'file'}"` : `${sub(r.key)}=${sub(r.value || '')}`)}`));
+    } else if (dto.body) parts.push(`--data-raw ${shellQuote(sub(dto.body))}`);
     return parts.join(' \\\n  ');
+}
+
+// ---------- Code snippets ----------
+/** The request as it goes over the wire: params in the URL, auth turned into headers, variables optionally filled in. */
+function wireRequest(rawDto, vars) {
+    const dto = prepareForSend(rawDto);
+    const sub = v => substituteVars(v, vars);
+    const url = sub(composeUrl(dto.url || '', mapToRows(dto.params, true)));
+    const headers = {};
+    Object.entries(dto.headers || {}).forEach(([k, v]) => { if (k !== '_insecure') headers[sub(k)] = sub(v); });
+    const auth = dto.authConfig || {};
+    if (dto.authType && dto.authConfig) {
+        const name = dto.authType === 'apikey' ? (auth.key || 'X-API-Key') : 'Authorization';
+        Object.keys(headers).filter(k => k.toLowerCase() === name.toLowerCase()).forEach(k => delete headers[k]);
+        if (dto.authType === 'bearer') headers.Authorization = 'Bearer ' + sub(auth.token || '');
+        if (dto.authType === 'basic') headers.Authorization = 'Basic ' + btoa(unescape(encodeURIComponent(sub(auth.username || '') + ':' + sub(auth.password || ''))));
+        if (dto.authType === 'apikey') headers[name] = sub(auth.value || '');
+    }
+    let form = null, body = null;
+    if (dto.bodyType === 'form-data' && dto.body) form = JSON.parse(dto.body).filter(r => r.enabled !== false && r.key).map(r => ({ ...r, key: sub(r.key), value: sub(r.value || '') }));
+    else if (dto.body) body = sub(dto.body);
+    const insecure = (dto.headers || {})._insecure === 'true' || dto.settings?.insecure;
+    return { method: dto.method || 'GET', url, headers, body, form, insecure, timeoutMs: dto.settings?.timeoutMs };
+}
+
+const q = s => JSON.stringify(String(s));
+const SNIPPETS = {
+    curl: (dto, vars) => buildCurl(dto, vars),
+    fetch: (dto, vars) => {
+        const w = wireRequest(dto, vars);
+        const lines = [];
+        if (w.form) {
+            lines.push('const form = new FormData();');
+            w.form.forEach(r => lines.push(r.type === 'file' ? `form.append(${q(r.key)}, fileInput.files[0]); // ${r.fileName || 'choose a file'}` : `form.append(${q(r.key)}, ${q(r.value)});`));
+            lines.push('');
+        }
+        const opts = [`  method: ${q(w.method)},`];
+        const hs = Object.entries(w.headers);
+        if (hs.length) opts.push('  headers: {', ...hs.map(([k, v]) => `    ${q(k)}: ${q(v)},`), '  },');
+        if (w.form) opts.push('  body: form,');
+        else if (w.body != null) opts.push(`  body: ${q(w.body)},`);
+        if (w.timeoutMs) opts.push(`  signal: AbortSignal.timeout(${w.timeoutMs}),`);
+        lines.push(`const response = await fetch(${q(w.url)}, {`, ...opts, '});', '', 'console.log(response.status, await response.text());');
+        if (w.insecure) lines.unshift('// Note: browsers can\'t skip SSL verification; in Node set NODE_TLS_REJECT_UNAUTHORIZED=0 for testing only.', '');
+        return lines.join('\n');
+    },
+    python: (dto, vars) => {
+        const w = wireRequest(dto, vars);
+        const lines = ['import requests', '', `url = ${q(w.url)}`];
+        const hs = Object.entries(w.headers);
+        if (hs.length) lines.push('headers = {', ...hs.map(([k, v]) => `    ${q(k)}: ${q(v)},`), '}');
+        const args = ['url'];
+        if (hs.length) args.push('headers=headers');
+        if (w.form) {
+            const text = w.form.filter(r => r.type !== 'file'), files = w.form.filter(r => r.type === 'file');
+            if (text.length) { lines.push('data = {', ...text.map(r => `    ${q(r.key)}: ${q(r.value)},`), '}'); args.push('data=data'); }
+            if (files.length) { lines.push('files = {', ...files.map(r => `    ${q(r.key)}: open(${q(r.fileName || 'file')}, "rb"),`), '}'); args.push('files=files'); }
+        } else if (w.body != null) { lines.push(`payload = ${q(w.body)}`); args.push('data=payload'); }
+        if (w.insecure) args.push('verify=False');
+        if (w.timeoutMs) args.push(`timeout=${w.timeoutMs / 1000}`);
+        lines.push('', `response = requests.request(${q(w.method)}, ${args.join(', ')})`, 'print(response.status_code, response.text)');
+        return lines.join('\n');
+    },
+    java: (dto, vars) => {
+        const w = wireRequest(dto, vars);
+        const lines = ['import java.net.URI;', 'import java.net.http.*;', 'import java.time.Duration;', '', 'HttpClient client = HttpClient.newHttpClient();', 'HttpRequest request = HttpRequest.newBuilder()', `        .uri(URI.create(${q(w.url)}))`];
+        Object.entries(w.headers).forEach(([k, v]) => lines.push(`        .header(${q(k)}, ${q(v)})`));
+        if (w.timeoutMs) lines.push(`        .timeout(Duration.ofMillis(${w.timeoutMs}))`);
+        const pub = w.form ? 'HttpRequest.BodyPublishers.noBody() /* multipart needs a helper, e.g. Apache HttpClient MultipartEntityBuilder */'
+            : w.body != null ? `HttpRequest.BodyPublishers.ofString(${q(w.body)})` : 'HttpRequest.BodyPublishers.noBody()';
+        lines.push(`        .method(${q(w.method)}, ${pub})`, '        .build();', '', 'HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());', 'System.out.println(response.statusCode() + " " + response.body());');
+        if (w.insecure) lines.unshift('// Note: this request ignores SSL errors in Reqly; Java needs a custom SSLContext for that.', '');
+        return lines.join('\n');
+    },
+};
+
+let snippetLang = lsGet('reqly.snippetLang', 'curl');
+function openSnippetModal() {
+    if (!buildRequestDto().url) return toast('Enter a URL first', true);
+    renderSnippet();
+    openModal('snippetModal');
+}
+function renderSnippet() {
+    document.querySelectorAll('#snippetTabs .tab').forEach(t => t.classList.toggle('active', t.dataset.lang === snippetLang));
+    const vars = $('snippetResolve').checked ? currentEnvVars() : {};
+    $('snippetCode').textContent = SNIPPETS[snippetLang](buildRequestDto(), vars);
+}
+function copySnippet() { copyText($('snippetCode').textContent).then(() => toast('Snippet copied')); }
+function initSnippets() {
+    $('snippetTabs').addEventListener('click', e => { const t = e.target.closest('[data-lang]'); if (t) { snippetLang = t.dataset.lang; lsSet('reqly.snippetLang', snippetLang); renderSnippet(); } });
+    $('snippetResolve').addEventListener('change', renderSnippet);
 }
 
 async function copyCurl(dto) {
@@ -1351,6 +1584,7 @@ function openSaveMenu(ev) {
         { label: 'Save as…', action: () => openSaveModal('saveAs') },
         '-',
         { label: 'Copy as cURL', icon: 'copy', action: copyCurrentAsCurl },
+        { label: 'Code snippet…', icon: 'copy', action: openSnippetModal },
     ]);
 }
 
@@ -2592,7 +2826,7 @@ function paletteSources() {
         ['Send request', MOD + '↵', 'send', () => sendOrCancel()],
         ['Save request', MOD + 'S', 'file', () => saveCurrentRequest()],
         ['Copy as cURL', '', 'copy', () => copyCurrentAsCurl()],
-        ['Code snippet…', '', 'copy', () => openSnippetModal?.()],
+        ['Code snippet…', '', 'copy', () => openSnippetModal()],
         ['Import cURL / Postman / backup', '', 'import', () => openImportModal()],
         ['Export everything (backup)', '', 'download', () => { location.href = '/api/export/all'; }],
         ['Manage environments', '', 'settings', () => openEnvModal()],
@@ -2864,6 +3098,10 @@ async function init() {
     initPalette();
     initVariableHelpers();
     initResponseTools();
+    initFormDataEditor();
+    initSnippets();
+    ['setTimeout', 'setInsecure', 'setRedirects'].forEach(id => $(id).addEventListener('change', () => { markDirty(); updateIndicators(); }));
+    ['gqlQuery', 'gqlVars'].forEach(id => $(id).addEventListener('input', () => { markDirty(); updateIndicators(); }));
     updateThemeButton();
     renderHud();
     bootSequence();

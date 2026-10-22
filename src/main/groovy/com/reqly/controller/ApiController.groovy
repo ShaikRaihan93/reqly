@@ -126,6 +126,17 @@ class ApiController {
         service.executeRequest(dto, environmentId)
     }
 
+    /** Same as /execute, plus uploaded files for form-data rows (part names "file:<rowIndex>"). */
+    @PostMapping(value = "/execute/multipart", consumes = "multipart/form-data")
+    ExecutionResult executeMultipart(@RequestPart("request") RequestDto dto,
+                                     @RequestParam(required = false) Long environmentId,
+                                     org.springframework.web.multipart.MultipartHttpServletRequest multipart) {
+        Map<String, Map> files = multipart.fileMap.findAll { k, v -> k.startsWith("file:") }.collectEntries { k, MultipartFile f ->
+            [k.substring(5), [name: f.originalFilename, contentType: f.contentType, bytes: f.bytes]]
+        }
+        service.executeRequest(dto, environmentId, files)
+    }
+
     @PostMapping("/execute/bulk")
     BulkExecutionSummary executeBulk(@RequestBody RequestDto dto,
                                       @RequestParam(defaultValue = "10") int times,
