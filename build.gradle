@@ -1,0 +1,65 @@
+plugins {
+	id 'groovy'
+	id 'org.springframework.boot' version '3.3.4'
+	id 'io.spring.dependency-management' version '1.1.7'
+}
+
+group = 'com.reqly'
+version = '1.0.0'
+description = 'Reqly — Lightweight API Testing Tool'
+
+java {
+	sourceCompatibility = '17'
+	targetCompatibility = '17'
+}
+
+tasks.withType(JavaCompile) {
+	options.compilerArgs << '-parameters'
+}
+
+tasks.withType(GroovyCompile).configureEach {
+	groovyOptions.parameters = true
+	groovyOptions.optimizationOptions.indy = true
+	options.compilerArgs << '-parameters'
+}
+
+repositories {
+	mavenCentral()
+}
+
+dependencies {
+
+	// Web + REST
+	implementation 'org.springframework.boot:spring-boot-starter-web'
+	implementation 'org.springframework.boot:spring-boot-starter-thymeleaf'
+	implementation 'org.springframework.boot:spring-boot-starter-validation'
+
+	// JPA / Hibernate
+	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+
+	// Database
+	implementation 'org.mariadb.jdbc:mariadb-java-client:3.3.3'
+	runtimeOnly 'com.h2database:h2'
+
+	// Groovy
+	implementation 'org.apache.groovy:groovy:4.0.23'
+	implementation 'org.apache.groovy:groovy-json:4.0.23'
+
+	// Jackson
+	implementation 'com.fasterxml.jackson.core:jackson-databind:2.16.1'
+	implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.16.1'
+
+	// CSV parsing
+	implementation 'com.opencsv:opencsv:5.9'
+
+	// HTTP client
+	implementation 'org.apache.httpcomponents.client5:httpclient5:5.3.1'
+
+	// Tests
+	testImplementation 'org.springframework.boot:spring-boot-starter-test'
+	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.named('test') {
+	useJUnitPlatform()
+}

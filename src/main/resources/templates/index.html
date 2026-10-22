@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="/favicon.ico" sizes="any">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+    <title>Reqly — API Testing</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700;800;900&family=Rajdhani:wght@500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+    <link rel="stylesheet" href="/css/app.css">
+    <link rel="stylesheet" href="/css/scifi.css">
+    <script>
+        // Apply the saved/system theme before first paint to avoid a flash
+        try {
+            var t = JSON.parse(localStorage.getItem('reqly.uiTheme') || 'null');
+            document.documentElement.dataset.theme = ['scifi', 'dark', 'light'].indexOf(t) >= 0 ? t : 'scifi';
+        } catch (e) { document.documentElement.dataset.theme = 'scifi'; }
+    </script>
+</head>
+<body>
+    <!-- Icon sprite -->
+    <svg width="0" height="0" style="position:absolute">
+        <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
+        <symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+        <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+        <symbol id="i-collection" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></symbol>
+        <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></symbol>
+        <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+        <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+        <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+        <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+        <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/></symbol>
+        <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12m0 0-4-4m4 4 4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></symbol>
+        <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 15V3m0 0L8 7m4-4 4 4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></symbol>
+        <symbol id="i-play" viewBox="0 0 24 24"><path d="m7 4 13 8-13 8z"/></symbol>
+        <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6m4-6v6M6 7l1 13h10l1-13M9 7V4h6v3"/></symbol>
+        <symbol id="i-history" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/></symbol>
+        <symbol id="i-send" viewBox="0 0 24 24"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4z"/></symbol>
+        <symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></symbol>
+        <symbol id="i-keyboard" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h0M10 10h0M14 10h0M18 10h0M7 14h10"/></symbol>
+        <symbol id="i-theme" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3v18a9 9 0 0 0 0-18z" fill="currentColor"/></symbol>
+        <symbol id="i-import" viewBox="0 0 24 24"><path d="M14 3h5a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-5"/><path d="M9 7l5 5-5 5"/><path d="M14 12H3"/></symbol>
+        <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></symbol>
+    </svg>
+
+    <div class="header">
+        <div class="logo"><img src="/favicon.svg" alt="">Reqly</div>
+        <div class="header-actions">
+            <div class="hud" title="Session telemetry: link status, requests transmitted, success rate">
+                <span class="link" id="hudLink"><i></i>LINK</span>
+                <span>TX <b id="hudTx">0</b></span>
+                <span>OK <b id="hudOk">—</b></span>
+            </div>
+            <button class="btn btn-ghost" onclick="openImportModal()" title="Import a cURL command or a Postman collection"><svg class="i"><use href="#i-import"/></svg>Import</button>
+            <div class="env-picker" title="Active environment. Its {{variables}} are filled in when you send">
+                <svg class="i muted"><use href="#i-settings"/></svg>
+                <select id="envSelect"></select>
+                <button class="icon-btn" id="envQuickLookBtn" onclick="toggleEnvQuickLook(event)" title="Quick look at variables"><svg class="i"><use href="#i-eye"/></svg></button>
+            </div>
+            <button class="btn btn-ghost" onclick="openEnvModal()" title="Create and edit environments and their variables">Environments</button>
+            <span class="header-sep"></span>
+            <button class="icon-btn" onclick="showShortcuts()" title="Keyboard shortcuts" data-tip-key="?"><svg class="i"><use href="#i-keyboard"/></svg></button>
+            <button class="icon-btn" id="themeBtn" onclick="toggleTheme()" title="Switch theme"><svg class="i"><use href="#i-theme"/></svg></button>
+        </div>
+    </div>
+
+    <div class="main">
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-tabs">
+                <div class="sidebar-tab active" data-side="collections" title="Saved requests, organized in collections and folders">Collections</div>
+                <div class="sidebar-tab" data-side="history" title="Requests you sent recently, with their responses">History</div>
+            </div>
+            <div class="sidebar-toolbar">
+                <div class="search-box"><svg class="i"><use href="#i-search"/></svg><input type="text" id="sidebarSearch" placeholder="Search" autocomplete="off"></div>
+                <button class="icon-btn" id="sidebarAddBtn" title="New collection" onclick="createFolder(null)"><svg class="i"><use href="#i-plus"/></svg></button>
+                <button class="icon-btn" id="sidebarClearBtn" title="Clear all history" onclick="clearHistory()" style="display:none"><svg class="i"><use href="#i-trash"/></svg></button>
+            </div>
+            <div class="sidebar-list" id="sidebarList"></div>
+        </aside>
+        <div class="resizer-x" id="sidebarResizer"></div>
+
+        <section class="content">
+            <div class="req-tabs">
+                <div class="req-tabs-scroll" id="reqTabs"></div>
+                <div class="req-tabs-actions">
+                    <button class="icon-btn" onclick="newTab()" title="New tab" data-tip-key="⌥T"><svg class="i"><use href="#i-plus"/></svg></button>
+                    <button class="icon-btn" onclick="openTabListMenu(event)" title="All open tabs"><svg class="i"><use href="#i-chevron-down"/></svg></button>
+                </div>
+            </div>
+
+            <div class="request-title" id="requestTitle"></div>
+            <div class="url-bar">
+                <div class="url-group">
+                    <select class="method-select" id="methodSelect" title="HTTP method">
+                        <option>GET</option><option>POST</option><option>PUT</option><option>PATCH</option><option>DELETE</option><option>HEAD</option><option>OPTIONS</option>
+                    </select>
+                    <div class="url-field"><div class="url-mirror" id="urlMirror" aria-hidden="true"></div><input type="text" class="url-input" id="urlInput" placeholder="Enter URL or paste cURL" spellcheck="false" autocomplete="off" /></div>
+                </div>
+                <button class="send-btn" id="sendBtn" onclick="sendOrCancel()" title="Send request" data-tip-key="⌘↵">Send</button>
+                <div class="split-btn">
+                    <button class="btn" onclick="saveCurrentRequest()" title="Save request" data-tip-key="⌘S">Save</button>
+                    <button class="btn" onclick="openSaveMenu(event)" title="Save as a copy, copy as cURL"><svg class="i"><use href="#i-chevron-down"/></svg></button>
+                </div>
+                <button class="icon-btn" onclick="copyCurrentAsCurl()" title="Copy as cURL, with environment variables filled in"><svg class="i"><use href="#i-copy"/></svg></button>
+            </div>
+
+            <div class="panels" id="panels">
+                <div class="request-panel" id="requestPanel">
+                    <div class="tabs" id="reqTabsBar">
+                        <div class="tab active" data-panel="reqParams" title="Query string parameters, kept in sync with the URL">Params <span class="count" id="cntParams"></span></div>
+                        <div class="tab" data-panel="reqAuth" title="How this request authenticates">Authorization <span class="mark" id="markAuth" style="display:none"></span></div>
+                        <div class="tab" data-panel="reqHeaders" title="HTTP headers sent with the request">Headers <span class="count" id="cntHeaders"></span></div>
+                        <div class="tab" data-panel="reqBody" title="Request payload">Body <span class="mark" id="markBody" style="display:none"></span></div>
+                        <div class="tab" data-panel="reqTests" title="Assertions checked against the response">Tests <span class="count" id="cntTests"></span></div>
+                        <div class="tab" data-panel="reqBulk" title="Load-test this request or run it once per CSV row">Bulk / CSV</div>
+                    </div>
+                    <div class="tab-content">
+                        <div class="tab-panel active" id="reqParams">
+                            <div class="panel-toolbar"><span class="title">Query Params</span><span class="spacer"></span><button class="btn btn-ghost btn-sm" data-bulk="paramsEditor" title="Switch between table and text (one key: value per line)">Bulk Edit</button></div>
+                            <div class="kv-editor" id="paramsEditor"></div>
+                        </div>
+                        <div class="tab-panel" id="reqAuth">
+                            <div class="auth-layout">
+                                <div class="auth-side">
+                                    <label class="field-label">Type</label>
+                                    <select class="select" id="authTypeSelect" title="Authorization type">
+                                        <option value="">No Auth</option>
+                                        <option value="bearer">Bearer Token</option>
+                                        <option value="basic">Basic Auth</option>
+                                        <option value="apikey">API Key</option>
+                                    </select>
+                                    <p class="hint" id="authHint">This request does not use any authorization.</p>
+                                </div>
+                                <div class="auth-fields" id="authFields"></div>
+                            </div>
+                        </div>
+                        <div class="tab-panel" id="reqHeaders">
+                            <div class="panel-toolbar"><span class="title">Headers</span><span class="hint" id="autoHeaderHint"></span><span class="spacer"></span><button class="btn btn-ghost btn-sm" data-bulk="headersEditor" title="Switch between table and text (one key: value per line)">Bulk Edit</button></div>
+                            <div class="kv-editor" id="headersEditor"></div>
+                        </div>
+                        <div class="tab-panel" id="reqBody">
+                            <div class="panel-toolbar">
+                                <div class="radio-group" id="bodyTypeGroup">
+                                    <label title="Send no body"><input type="radio" name="bodyType" value="none"> none</label>
+                                    <label title="Raw JSON. Content-Type: application/json is added unless you set one"><input type="radio" name="bodyType" value="raw" checked> JSON</label>
+                                    <label title="Plain text. Content-Type: text/plain is added unless you set one"><input type="radio" name="bodyType" value="text"> Text</label>
+                                    <label title="Key/value form fields, URL-encoded like an HTML form"><input type="radio" name="bodyType" value="x-www-form-urlencoded"> x-www-form-urlencoded</label>
+                                </div>
+                                <span class="spacer"></span>
+                                <button class="btn btn-ghost btn-sm" id="beautifyBtn" onclick="beautifyBody()" title="Format the JSON body with indentation">Beautify</button>
+                            </div>
+                            <div class="body-none" id="bodyNone">This request does not have a body</div>
+                            <textarea class="code" id="bodyEditor" spellcheck="false" placeholder='{ "key": "value" }'></textarea>
+                            <div class="kv-editor" id="formEditor"></div>
+                        </div>
+                        <div class="tab-panel" id="reqTests">
+                            <div class="tests-layout">
+                                <textarea class="code" id="testEditor" spellcheck="false" placeholder="One assertion per line, e.g.&#10;status == 200&#10;responseTime < 2000"></textarea>
+                                <div class="snippets">
+                                    <span class="field-label">Snippets</span>
+                                    <div class="snippet" data-snippet="status == 200">Status code is 200</div>
+                                    <div class="snippet" data-snippet="status < 400">Status is not an error</div>
+                                    <div class="snippet" data-snippet="responseTime < 500">Response time below 500ms</div>
+                                    <div class="snippet" data-snippet='body contains "text"'>Body contains string</div>
+                                    <div class="snippet" data-snippet='body notContains "error"'>Body does not contain</div>
+                                    <div class="snippet" data-snippet='header.Content-Type contains "json"'>Content-Type is JSON</div>
+                                    <div class="snippet" data-snippet='json.data.id == "123"'>JSON value equals</div>
+                                    <div class="snippet" data-snippet="json.items.length > 0">JSON array not empty</div>
+                                    <p class="hint" style="margin-top:8px">Lines starting with <code>//</code> are ignored.</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="tab-panel" id="reqBulk">
+                            <div class="bulk-section">
+                                <h4>Repeat request</h4>
+                                <p class="hint">Fire the same request many times in parallel (up to 50 at once) and see latency stats.</p>
+                                <div class="bulk-row">
+                                    <input type="number" class="input" id="bulkCount" title="How many times to send the request" value="10" min="1" max="10000" />
+                                    <span class="muted">times</span>
+                                    <button class="btn btn-primary" onclick="sendBulk()"><svg class="i"><use href="#i-play"/></svg>Run</button>
+                                </div>
+                            </div>
+                            <div class="bulk-section">
+                                <h4>Data-driven run (CSV)</h4>
+                                <p class="hint">Each CSV row runs the request once; columns become variables, e.g. <code>{{userId}}</code>.</p>
+                                <div class="bulk-row">
+                                    <label class="file-drop" title="Pick a CSV file; the first row is the header"><svg class="i"><use href="#i-file"/></svg><span id="csvFileName">Choose a CSV file…</span><input type="file" id="csvFile" accept=".csv" hidden /></label>
+                                    <button class="btn btn-primary" onclick="sendCsv()"><svg class="i"><use href="#i-play"/></svg>Run with CSV</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="resizer-y" id="panelResizer"></div>
+
+                <div class="response-panel">
+                    <div class="response-bar">
+                        <div class="tabs" id="resTabsBar">
+                            <div class="tab active" data-panel="resBody" title="Response body">Body</div>
+                            <div class="tab" data-panel="resHeaders" title="Headers returned by the server">Headers <span class="count" id="cntResHeaders"></span></div>
+                            <div class="tab" data-panel="resTests" title="Results of the assertions in the Tests tab">Test Results <span class="count" id="cntResTests"></span></div>
+                            <div class="tab" data-panel="resBulk" title="Stats from the last bulk or CSV run">Bulk Results</div>
+                        </div>
+                        <div class="response-meta" id="responseMeta"></div>
+                    </div>
+                    <div class="tab-content">
+                        <div class="tab-panel active" id="resBody">
+                            <div class="panel-toolbar" id="resBodyToolbar" style="display:none">
+                                <div class="seg" id="viewModeSeg">
+                                    <button data-mode="pretty" class="active" title="Formatted and colorized JSON">Pretty</button>
+                                    <button data-mode="raw" title="Exactly as the server sent it">Raw</button>
+                                    <button data-mode="preview" title="Render the HTML in a sandbox (no scripts)">Preview</button>
+                                </div>
+                                <span class="spacer"></span>
+                                <button class="icon-btn" onclick="copyResponseBody()" title="Copy response body"><svg class="i"><use href="#i-copy"/></svg></button>
+                                <button class="icon-btn" onclick="downloadResponse()" title="Save response body to a file"><svg class="i"><use href="#i-download"/></svg></button>
+                            </div>
+                            <div class="response-body" id="responseBody"></div>
+                        </div>
+                        <div class="tab-panel" id="resHeaders"><div id="responseHeaders"></div></div>
+                        <div class="tab-panel" id="resTests"><div id="testResults"></div></div>
+                        <div class="tab-panel" id="resBulk"><div id="bulkResults"></div></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- Generic dialog (confirm / alert) -->
+    <div class="modal-overlay" id="dialogModal">
+        <div class="modal">
+            <div class="modal-head"><h3 id="dialogTitle"></h3></div>
+            <div class="modal-body"><p id="dialogMessage"></p></div>
+            <div class="modal-foot">
+                <button class="btn" id="dialogCancel">Cancel</button>
+                <button class="btn btn-primary" id="dialogOk">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Import -->
+    <div class="modal-overlay" id="importModal">
+        <div class="modal wide">
+            <div class="modal-head"><h3>Import</h3><button class="icon-btn" onclick="closeModal('importModal')"><svg class="i"><use href="#i-x"/></svg></button></div>
+            <div class="modal-body">
+                <div class="seg-tabs tabs" id="importTabs">
+                    <div class="tab active" data-import="curl">cURL</div>
+                    <div class="tab" data-import="postman">Postman collection</div>
+                </div>
+                <div id="importCurlPane">
+                    <textarea class="code" id="curlInput" rows="8" spellcheck="false" placeholder="curl --location 'https://api.example.com/users' --header 'Authorization: Bearer …'"></textarea>
+                    <p class="hint" style="margin-top:8px">Tip: you can also paste a cURL command straight into the URL bar.</p>
+                </div>
+                <div id="importPostmanPane" style="display:none">
+                    <label class="file-drop" style="margin-bottom:10px"><svg class="i"><use href="#i-import"/></svg><span id="postmanFileName">Choose a Postman collection (.json, v2.0 / v2.1)…</span><input type="file" id="postmanFile" accept=".json,application/json" hidden /></label>
+                    <textarea class="code" id="postmanInput" rows="8" spellcheck="false" placeholder="…or paste the collection JSON here"></textarea>
+                    <p class="hint" style="margin-top:8px">Folders, params, headers, bodies and auth are imported. Collection variables become a new environment. Postman JS test scripts are not run; <code>pm.response.to.have.status(…)</code> is converted.</p>
+                </div>
+            </div>
+            <div class="modal-foot">
+                <button class="btn" onclick="closeModal('importModal')">Cancel</button>
+                <button class="btn btn-primary" id="importBtn" onclick="runImport()">Import</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Save / Move (folder picker) -->
+    <div class="modal-overlay" id="saveModal">
+        <div class="modal">
+            <div class="modal-head"><h3 id="saveModalTitle">Save request</h3><button class="icon-btn" onclick="closeModal('saveModal')"><svg class="i"><use href="#i-x"/></svg></button></div>
+            <div class="modal-body">
+                <div id="saveNameRow">
+                    <label class="field-label">Request name</label>
+                    <input type="text" class="input" id="saveReqName" />
+                </div>
+                <div>
+                    <label class="field-label" id="savePickerLabel">Save to</label>
+                    <div class="folder-picker" id="folderPicker"></div>
+                </div>
+            </div>
+            <div class="modal-foot">
+                <button class="btn btn-ghost" onclick="createFolderInPicker()"><svg class="i"><use href="#i-plus"/></svg>New collection</button>
+                <span class="spacer"></span>
+                <button class="btn" onclick="closeModal('saveModal')">Cancel</button>
+                <button class="btn btn-primary" id="saveModalOk">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Environments -->
+    <div class="modal-overlay" id="envModal">
+        <div class="modal env-modal">
+            <div class="modal-head"><h3>Environments</h3><button class="icon-btn" onclick="closeModal('envModal')"><svg class="i"><use href="#i-x"/></svg></button></div>
+            <div class="modal-body">
+                <div class="env-sidebar">
+                    <div class="env-sidebar-list" id="envList"></div>
+                    <div class="env-sidebar-foot"><button class="btn" style="width:100%;justify-content:center" onclick="newEnvironment()"><svg class="i"><use href="#i-plus"/></svg>New environment</button></div>
+                </div>
+                <div class="env-editor" id="envEditor"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Collection runner -->
+    <div class="modal-overlay" id="runnerModal">
+        <div class="modal runner-modal">
+            <div class="modal-head"><h3 id="runnerTitle">Run collection</h3><button class="icon-btn" onclick="closeRunner()"><svg class="i"><use href="#i-x"/></svg></button></div>
+            <div class="progress"><div id="runnerProgress"></div></div>
+            <div class="modal-body">
+                <div class="runner-config">
+                    <div>
+                        <label class="field-label">Environment</label>
+                        <select class="select" id="runnerEnv" title="Environment used for this run"></select>
+                    </div>
+                    <div style="display:flex;gap:10px">
+                        <div style="flex:1"><label class="field-label">Iterations</label><input type="number" class="input" id="runnerIterations" title="Run the selected requests this many times" value="1" min="1" max="1000"></div>
+                        <div style="flex:1"><label class="field-label">Delay (ms)</label><input type="number" class="input" id="runnerDelay" title="Pause between requests, in milliseconds" value="0" min="0" max="60000"></div>
+                    </div>
+                    <div>
+                        <label class="field-label">Data file <span class="muted">· optional</span></label>
+                        <div class="data-file">
+                            <label class="file-drop" title="CSV with a header row, or a JSON array of objects.&#10;Each row is one iteration; each column becomes a {{variable}}."><svg class="i"><use href="#i-file"/></svg><span id="runnerDataName">Select CSV or JSON…</span><input type="file" id="runnerDataFile" accept=".csv,.json,text/csv,application/json" hidden></label>
+                            <button class="icon-btn" id="runnerDataClear" title="Remove data file" style="display:none"><svg class="i"><use href="#i-x"/></svg></button>
+                        </div>
+                        <div class="hint" id="runnerDataInfo" style="margin-top:6px"></div>
+                    </div>
+                    <div>
+                        <div style="display:flex;justify-content:space-between;align-items:center"><label class="field-label">Requests</label><label class="hint" style="display:flex;gap:6px;align-items:center;cursor:pointer" title="Select or clear all requests"><input type="checkbox" id="runnerAll" checked> All</label></div>
+                        <div class="runner-list" id="runnerList"></div>
+                    </div>
+                    <label class="hint" style="display:flex;gap:6px;align-items:center;cursor:pointer" title="Stop when a request errors or any test fails"><input type="checkbox" id="runnerStopOnFail"> Stop on first failure</label>
+                    <button class="btn btn-primary runner-start" id="runnerStartBtn" onclick="startRunner()"><svg class="i"><use href="#i-play"/></svg>Run</button>
+                </div>
+                <div class="runner-results">
+                    <div class="runner-summary" id="runnerSummary"></div>
+                    <div class="runner-rows" id="runnerRows"><div class="empty-state"><svg class="i"><use href="#i-play"/></svg><div>Pick requests and press Run</div></div></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="ctx-menu" id="ctxMenu"></div>
+    <div class="popover" id="envPopover"></div>
+    <div class="toast" id="toast"></div>
+    <div class="tooltip" id="tooltip"></div>
+
+    <!-- Sci-fi boot sequence (shown once per browser session in the sci-fi theme) -->
+    <div class="boot" id="boot" title="Click to skip">
+        <div class="boot-inner">
+            <div class="boot-logo">REQLY</div>
+            <div class="boot-lines" id="bootLines"></div>
+            <div class="boot-bar"><div></div></div>
+            <div class="boot-skip">CLICK OR PRESS ANY KEY TO SKIP</div>
+        </div>
+    </div>
+
+    <script src="/js/app.js"></script>
+</body>
+</html>

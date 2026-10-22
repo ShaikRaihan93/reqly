@@ -1,0 +1,16 @@
+# Build output
+build/
+.gradle/
+out/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# OS
+.DS_Store
+
+# Local data never belongs in git (it lives in ~/reqly-data anyway)
+*.mv.db
+*.trace.db
