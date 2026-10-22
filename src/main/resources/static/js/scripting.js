@@ -19,7 +19,7 @@ const CONSOLE_MAX = 1000;
 function logToConsole(level, source, args) {
     reqlyConsole.entries.push({ id: ++reqlyConsole.seq, level, source, args, time: new Date() });
     if (reqlyConsole.entries.length > CONSOLE_MAX) reqlyConsole.entries.shift();
-    const open = $('consolePanel').classList.contains('active');
+    const open = $('consolePanel').classList.contains('active') && dockTab === 'console';
     if (!open) {
         reqlyConsole.unread++;
         if (level === 'error') reqlyConsole.errors++;
@@ -102,18 +102,48 @@ function appendConsoleEntry(e, scroll) {
     if (scroll && atBottom) list.scrollTop = list.scrollHeight;
 }
 
-function toggleConsole(force) {
+// ---------- Bottom dock: Console and Terminal share one resizable panel ----------
+let dockTab = 'console';
+
+function showDock(tab) {
+    dockTab = tab;
     const panel = $('consolePanel');
-    const open = force ?? !panel.classList.contains('active');
-    panel.classList.toggle('active', open);
-    $('consoleToggle').classList.toggle('active', open);
-    lsSet('reqly.consoleOpen', open);
-    if (open) {
+    panel.classList.add('active');
+    panel.dataset.tab = tab;
+    document.querySelectorAll('#dockTabs .dock-tab').forEach(b => b.classList.toggle('active', b.dataset.dock === tab));
+    $('consoleToggle').classList.toggle('active', tab === 'console');
+    $('terminalToggle').classList.toggle('active', tab === 'terminal');
+    lsSet('reqly.dock', tab);
+    if (tab === 'console') {
         reqlyConsole.unread = 0; reqlyConsole.errors = 0;
         updateConsoleBadge();
         renderConsole();
+    } else {
+        setTimeout(() => $('termInput').focus(), 0);
+        termScrollToEnd();
     }
 }
+
+function closeDock() {
+    $('consolePanel').classList.remove('active');
+    $('consoleToggle').classList.remove('active');
+    $('terminalToggle').classList.remove('active');
+    lsSet('reqly.dock', null);
+}
+
+/** Status-bar buttons: open that tab, or close the panel if it's already showing. */
+function toggleDock(tab) {
+    if ($('consolePanel').classList.contains('active') && dockTab === tab) closeDock();
+    else showDock(tab);
+}
+
+function toggleConsole(force) {
+    if (force === false) return closeDock();
+    if (force === true) return showDock('console');
+    toggleDock('console');
+}
+
+function dockClear() { if (dockTab === 'terminal') termClear(); else clearConsole(); }
 
 function clearConsole() {
     reqlyConsole.entries = [];
@@ -147,10 +177,13 @@ function initConsole() {
         window.addEventListener('mouseup', up);
     });
     document.addEventListener('keydown', e => {
-        // ⌘⌥C / Ctrl+Alt+C, as in Postman
-        if ((e.metaKey || e.ctrlKey) && e.altKey && e.code === 'KeyC') { e.preventDefault(); toggleConsole(); }
+        // ⌘⌥C / Ctrl+Alt+C opens the console (as in Postman); Ctrl+` the terminal (as in VS Code)
+        if ((e.metaKey || e.ctrlKey) && e.altKey && e.code === 'KeyC') { e.preventDefault(); toggleDock('console'); }
+        if (e.ctrlKey && e.code === 'Backquote') { e.preventDefault(); toggleDock('terminal'); }
     });
-    if (lsGet('reqly.consoleOpen', false)) toggleConsole(true);
+    $('dockTabs').addEventListener('click', e => { const b = e.target.closest('[data-dock]'); if (b) showDock(b.dataset.dock); });
+    const last = lsGet('reqly.dock', null);
+    if (last) showDock(last);
     renderConsole();
 }
 

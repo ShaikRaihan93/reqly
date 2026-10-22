@@ -614,3 +614,18 @@
 :root[data-theme="scifi"] .c-time { color: rgba(0, 240, 255, 0.55); }
 :root[data-theme="scifi"] .c-badge { background: var(--magenta); color: #fff; box-shadow: 0 0 8px var(--magenta); }
 :root[data-theme="scifi"] .c-details pre { background: rgba(2, 8, 20, 0.8); border-color: var(--border-strong); }
+
+/* Status bar + terminal */
+:root[data-theme="scifi"] .statusbar { background: rgba(5, 10, 24, 0.9); border-top: 1px solid var(--border-strong); box-shadow: 0 -1px 0 rgba(0, 240, 255, 0.08); font-family: var(--hud); letter-spacing: 1px; text-transform: uppercase; }
+:root[data-theme="scifi"] .sb-btn { font-family: var(--hud); font-weight: 700; font-size: 11px; letter-spacing: 1.2px; text-transform: uppercase; }
+:root[data-theme="scifi"] .sb-btn:hover, :root[data-theme="scifi"] .sb-btn.active { color: var(--accent); background: rgba(0, 240, 255, 0.08); text-shadow: 0 0 8px rgba(0, 240, 255, 0.6); }
+:root[data-theme="scifi"] .sb-dot { box-shadow: 0 0 8px var(--green); animation: sf-blink 1.6s ease-in-out infinite; }
+:root[data-theme="scifi"] .dock-tab { font-family: var(--hud); letter-spacing: 1.5px; text-transform: uppercase; font-size: 11px; }
+:root[data-theme="scifi"] .dock-tab.active { color: var(--accent); background: rgba(0, 240, 255, 0.1); box-shadow: inset 0 -2px 0 var(--accent); text-shadow: 0 0 8px rgba(0, 240, 255, 0.6); }
+:root[data-theme="scifi"] .terminal { background: rgba(1, 5, 12, 0.85); }
+:root[data-theme="scifi"] .term-line { color: #bff8ff; }
+:root[data-theme="scifi"] .term-prompt { color: var(--magenta); text-shadow: 0 0 8px rgba(255, 43, 214, 0.7); }
+:root[data-theme="scifi"] .term-input input { color: #eaffff; caret-color: var(--accent); }
+:root[data-theme="scifi"] .t-brand { font-family: var(--display); background: linear-gradient(90deg, #7af9ff, #ff2bd6); -webkit-background-clip: text; background-clip: text; color: transparent; }
+:root[data-theme="scifi"] .t-ok { text-shadow: 0 0 6px rgba(77, 255, 160, 0.5); }
+:root[data-theme="scifi"] .t-err { text-shadow: 0 0 6px rgba(255, 61, 110, 0.5); }

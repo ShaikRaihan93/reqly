@@ -2130,6 +2130,13 @@ async function loadEnvironments() {
     sel.innerHTML = '<option value="">No environment</option>' + state.environments.map(e => `<option value="${e.id}">${esc(e.name)}</option>`).join('');
     sel.value = state.environments.some(e => String(e.id) === current) ? current : '';
     renderUrlMirror();
+    renderStatusEnv();
+}
+
+function renderStatusEnv() {
+    const env = activeEnv();
+    $('sbEnvName').textContent = env ? env.name : 'No environment';
+    $('sbEnv').classList.toggle('none', !env);
 }
 
 async function openEnvModal(envId) {
@@ -2732,7 +2739,7 @@ function initEvents() {
     });
 
     // Environments
-    $('envSelect').addEventListener('change', e => { lsSet('reqly.env', e.target.value); $('envPopover').classList.remove('active'); renderUrlMirror(); });
+    $('envSelect').addEventListener('change', e => { lsSet('reqly.env', e.target.value); $('envPopover').classList.remove('active'); renderUrlMirror(); renderStatusEnv(); });
     $('envList').addEventListener('click', e => { const it = e.target.closest('[data-env]'); if (it) selectEnv(+it.dataset.env); });
 
     // Import
@@ -2984,7 +2991,8 @@ function paletteSources() {
         ['Toggle side-by-side layout', '', 'columns', () => toggleLayout()],
         ['Toggle sound effects (sci-fi)', '', 'sound-on', () => toggleSound()],
         ['Keyboard shortcuts', '?', 'keyboard', () => showShortcuts()],
-        ['Toggle console', MOD + '⌥C', 'terminal', () => toggleConsole()],
+        ['Toggle console', MOD + '⌥C', 'list', () => toggleDock('console')],
+        ['Toggle terminal', '⌃`', 'terminal', () => toggleDock('terminal')],
         ['Clear console', '', 'terminal', () => clearConsole()],
         ['Show history', '', 'history', () => switchSidebar('history')],
     ];
@@ -3217,7 +3225,7 @@ function bootSequence() {
 }
 
 function showShortcuts() {
-    const rows = [[MOD + 'K', 'Search & jump to anything'], [MOD + '↵', 'Send request'], [MOD + 'S', 'Save request'], [MOD + 'F', 'Find in response'], [MOD + 'B', 'Show / hide sidebar'], [MOD + '⌥C', 'Show / hide console'], ['Enter', 'Send (in the URL bar)'], ['⌥T', 'New tab'], ['⌥W', 'Close tab'], ['Esc', 'Close dialog / menu'], ['?', 'Show this list'],
+    const rows = [[MOD + 'K', 'Search & jump to anything'], [MOD + '↵', 'Send request'], [MOD + 'S', 'Save request'], [MOD + 'F', 'Find in response'], [MOD + 'B', 'Show / hide sidebar'], [MOD + '⌥C', 'Show / hide console'], ['⌃`', 'Show / hide terminal'], ['Enter', 'Send (in the URL bar)'], ['⌥T', 'New tab'], ['⌥W', 'Close tab'], ['Esc', 'Close dialog / menu'], ['?', 'Show this list'],
         ['Double-click', 'Rename an item in the sidebar'], ['Right-click', 'Item and tab menus'], ['Middle-click', 'Close a tab'], ['Paste cURL', 'Into the URL bar to import it']];
     uiDialog({
         title: 'Keyboard shortcuts', okText: 'Close', alertOnly: true,

@@ -53,6 +53,7 @@
         <symbol id="i-sound-on" viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></symbol>
         <symbol id="i-sound-off" viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="m22 9-6 6M16 9l6 6"/></symbol>
         <symbol id="i-terminal" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3M13 15h4"/></symbol>
+        <symbol id="i-list" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></symbol>
         <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></symbol>
     </svg>
 
@@ -74,7 +75,6 @@
                 <button class="icon-btn" id="envQuickLookBtn" onclick="toggleEnvQuickLook(event)" title="Quick look at variables"><svg class="i"><use href="#i-eye"/></svg></button>
             </div>
             <button class="btn btn-ghost" onclick="openEnvModal()" title="Create and edit environments and their variables"><svg class="i"><use href="#i-settings"/></svg>Environments</button>
-            <button class="btn btn-ghost console-toggle" id="consoleToggle" onclick="toggleConsole()" title="Console: script logs and every request/response" data-tip-key="⌘⌥C"><svg class="i"><use href="#i-terminal"/></svg>Console<span class="c-badge" id="consoleBadge"></span></button>
             <span class="header-sep"></span>
             <button class="icon-btn scifi-only" id="soundBtn" onclick="toggleSound()" title="Sound effects"><svg class="i"><use href="#i-sound-off"/></svg></button>
             <button class="icon-btn" onclick="showShortcuts()" title="Keyboard shortcuts" data-tip-key="?"><svg class="i"><use href="#i-keyboard"/></svg></button>
@@ -311,19 +311,36 @@
     <section class="console" id="consolePanel">
         <div class="console-resizer" id="consoleResizer"></div>
         <div class="console-head">
-            <span class="console-title"><svg class="i"><use href="#i-terminal"/></svg>Console</span>
-            <div class="seg" id="consoleFilters">
+            <div class="dock-tabs" id="dockTabs">
+                <button class="dock-tab active" data-dock="console" title="Script logs and every request/response" data-tip-key="⌘⌥C"><svg class="i"><use href="#i-list"/></svg>Console</button>
+                <button class="dock-tab" data-dock="terminal" title="Run curl and Reqly commands" data-tip-key="⌃`"><svg class="i"><use href="#i-terminal"/></svg>Terminal</button>
+            </div>
+            <div class="seg dock-console-only" id="consoleFilters">
                 <button data-filter="all" class="active">All</button>
                 <button data-filter="log">Logs</button>
                 <button data-filter="net">Network</button>
                 <button data-filter="error">Errors</button>
             </div>
             <span class="spacer"></span>
-            <button class="btn btn-ghost btn-sm" onclick="clearConsole()" title="Clear the console">Clear</button>
-            <button class="icon-btn" onclick="toggleConsole(false)" title="Close" data-tip-key="⌘⌥C"><svg class="i"><use href="#i-x"/></svg></button>
+            <button class="btn btn-ghost btn-sm" onclick="dockClear()" title="Clear">Clear</button>
+            <button class="icon-btn" onclick="closeDock()" title="Close panel"><svg class="i"><use href="#i-x"/></svg></button>
         </div>
         <div class="console-list" id="consoleList"></div>
+        <div class="terminal" id="terminalPane">
+            <div class="term-out" id="termOut"></div>
+            <div class="term-input"><span class="term-prompt">reqly ❯</span><input type="text" id="termInput" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="type help, or paste a curl command"></div>
+        </div>
     </section>
+
+    <!-- Status bar -->
+    <footer class="statusbar">
+        <button class="sb-btn" id="consoleToggle" onclick="toggleDock('console')" title="Console: script logs and every request/response" data-tip-key="⌘⌥C"><svg class="i"><use href="#i-list"/></svg>Console<span class="c-badge" id="consoleBadge"></span></button>
+        <button class="sb-btn" id="terminalToggle" onclick="toggleDock('terminal')" title="Terminal: run curl and Reqly commands" data-tip-key="⌃`"><svg class="i"><use href="#i-terminal"/></svg>Terminal</button>
+        <span class="sb-spacer"></span>
+        <button class="sb-btn" id="sbEnv" onclick="openEnvModal()" title="Active environment. Click to manage environments"><span class="sb-dot"></span><span id="sbEnvName">No environment</span></button>
+        <button class="sb-btn" onclick="openPalette()" title="Search & jump to anything" data-tip-key="⌘K"><svg class="i"><use href="#i-search"/></svg>⌘K</button>
+        <button class="sb-btn" onclick="showShortcuts()" title="Keyboard shortcuts"><svg class="i"><use href="#i-keyboard"/></svg></button>
+    </footer>
 
     <!-- Generic dialog (confirm / alert) -->
     <div class="modal-overlay" id="dialogModal">
@@ -506,6 +523,7 @@
 
     <script src="/js/app.js"></script>
     <script src="/js/scripting.js"></script>
-    <script>initConsole(); initScriptEditor();</script>
+    <script src="/js/terminal.js"></script>
+    <script>initConsole(); initScriptEditor(); initTerminal();</script>
 </body>
 </html>
