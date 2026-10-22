@@ -268,6 +268,10 @@ class ReqlyService {
         historyRepo.findTop100ByOrderByExecutedAtDesc()
     }
 
+    List<RequestHistory> getRequestHistory(Long requestId) {
+        historyRepo.findByApiRequestIdOrderByExecutedAtDesc(requestId).take(20)
+    }
+
     void clearHistory() {
         historyRepo.deleteAll()
     }

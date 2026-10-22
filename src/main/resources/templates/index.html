@@ -44,6 +44,9 @@
         <symbol id="i-theme" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3v18a9 9 0 0 0 0-18z" fill="currentColor"/></symbol>
         <symbol id="i-import" viewBox="0 0 24 24"><path d="M14 3h5a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-5"/><path d="M9 7l5 5-5 5"/><path d="M14 12H3"/></symbol>
         <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
+        <symbol id="i-chevron-up" viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></symbol>
+        <symbol id="i-collapse" viewBox="0 0 24 24"><path d="m7 20 5-5 5 5M7 4l5 5 5-5"/></symbol>
+        <symbol id="i-expand" viewBox="0 0 24 24"><path d="m7 15 5 5 5-5M7 9l5-5 5 5"/></symbol>
         <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></symbol>
     </svg>
 
@@ -211,6 +214,7 @@
                             <div class="tab" data-panel="resHeaders" title="Headers returned by the server">Headers <span class="count" id="cntResHeaders"></span></div>
                             <div class="tab" data-panel="resTests" title="Results of the assertions in the Tests tab">Test Results <span class="count" id="cntResTests"></span></div>
                             <div class="tab" data-panel="resBulk" title="Stats from the last bulk or CSV run">Bulk Results</div>
+                            <div class="tab" data-panel="resHistory" title="Earlier responses to this saved request; compare any two">History</div>
                         </div>
                         <div class="response-meta" id="responseMeta"></div>
                     </div>
@@ -222,15 +226,30 @@
                                     <button data-mode="raw" title="Exactly as the server sent it">Raw</button>
                                     <button data-mode="preview" title="Render the HTML in a sandbox (no scripts)">Preview</button>
                                 </div>
+                                <div class="jp-filter" id="jsonFilterBox" title="JSONPath filter, e.g. $.hits.hits[*]._id  or  $..id">
+                                    <span class="jp-label">$</span><input type="text" id="jsonFilter" placeholder="Filter: $.data[*].id" spellcheck="false" autocomplete="off">
+                                </div>
                                 <span class="spacer"></span>
+                                <button class="icon-btn" id="treeCollapseBtn" onclick="setTreeCollapsed(true)" title="Collapse all"><svg class="i"><use href="#i-collapse"/></svg></button>
+                                <button class="icon-btn" id="treeExpandBtn" onclick="setTreeCollapsed(false)" title="Expand all"><svg class="i"><use href="#i-expand"/></svg></button>
+                                <button class="icon-btn" onclick="openResponseSearch()" title="Search in response" data-tip-key="⌘F"><svg class="i"><use href="#i-search"/></svg></button>
                                 <button class="icon-btn" onclick="copyResponseBody()" title="Copy response body"><svg class="i"><use href="#i-copy"/></svg></button>
                                 <button class="icon-btn" onclick="downloadResponse()" title="Save response body to a file"><svg class="i"><use href="#i-download"/></svg></button>
+                            </div>
+                            <div class="res-search" id="resSearch">
+                                <svg class="i"><use href="#i-search"/></svg>
+                                <input type="text" id="resSearchInput" placeholder="Find in response" spellcheck="false" autocomplete="off">
+                                <span class="hint" id="resSearchCount"></span>
+                                <button class="icon-btn" onclick="stepResponseSearch(-1)" title="Previous match (⇧↵)"><svg class="i"><use href="#i-chevron-up"/></svg></button>
+                                <button class="icon-btn" onclick="stepResponseSearch(1)" title="Next match (↵)"><svg class="i"><use href="#i-chevron-down"/></svg></button>
+                                <button class="icon-btn" onclick="closeResponseSearch()" title="Close (Esc)"><svg class="i"><use href="#i-x"/></svg></button>
                             </div>
                             <div class="response-body" id="responseBody"></div>
                         </div>
                         <div class="tab-panel" id="resHeaders"><div id="responseHeaders"></div></div>
                         <div class="tab-panel" id="resTests"><div id="testResults"></div></div>
                         <div class="tab-panel" id="resBulk"><div id="bulkResults"></div></div>
+                        <div class="tab-panel" id="resHistory"><div id="responseHistory"></div></div>
                     </div>
                 </div>
             </div>

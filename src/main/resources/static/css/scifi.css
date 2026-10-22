@@ -588,3 +588,14 @@
 :root[data-theme="scifi"] .suggest-item.active { background: linear-gradient(90deg, rgba(0, 240, 255, 0.2), transparent); box-shadow: inset 2px 0 0 var(--accent); }
 :root[data-theme="scifi"] .suggest-item .name { color: var(--magenta); text-shadow: 0 0 6px rgba(255, 43, 214, 0.5); }
 :root[data-theme="scifi"] .row-secret.active { color: var(--yellow); filter: drop-shadow(0 0 4px var(--yellow)); }
+
+/* Response tools */
+:root[data-theme="scifi"] .jp-filter, :root[data-theme="scifi"] .res-search { background: rgba(2, 8, 20, 0.75); border-color: var(--border-strong); }
+:root[data-theme="scifi"] .jp-filter:focus-within, :root[data-theme="scifi"] .res-search { border-color: var(--accent); box-shadow: 0 0 12px rgba(0, 240, 255, 0.2); }
+:root[data-theme="scifi"] .json-tree .jt-children { border-left-color: rgba(0, 240, 255, 0.15); }
+:root[data-theme="scifi"] .json-tree .jt-tog::before { color: var(--accent); text-shadow: 0 0 6px var(--accent); }
+:root[data-theme="scifi"] mark.hit { background: rgba(255, 43, 214, 0.3); }
+:root[data-theme="scifi"] mark.hit.current { background: var(--magenta); color: #fff; box-shadow: 0 0 10px var(--magenta); }
+:root[data-theme="scifi"] pre.diff, :root[data-theme="scifi"] .rh-list { border-color: var(--border-strong); background: rgba(2, 8, 20, 0.6); }
+:root[data-theme="scifi"] pre.diff .da { background: rgba(77, 255, 160, 0.1); box-shadow: inset 2px 0 0 var(--green); }
+:root[data-theme="scifi"] pre.diff .dd { background: rgba(255, 61, 110, 0.1); box-shadow: inset 2px 0 0 var(--red); }

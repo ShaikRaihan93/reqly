@@ -103,6 +103,11 @@ class ApiController {
         ResponseEntity.ok().build()
     }
 
+    @GetMapping("/requests/{id}/history")
+    List<RequestHistory> getRequestHistory(@PathVariable Long id) {
+        service.getRequestHistory(id)
+    }
+
     @PatchMapping("/requests/{id}")
     RequestDto updateRequest(@PathVariable Long id, @RequestBody Map<String, Object> body) {
         service.getRequestDto(service.updateRequest(id, body).id)

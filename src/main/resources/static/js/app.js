@@ -509,6 +509,7 @@ function switchToTab(id) {
     const tab = activeTab();
     loadRequestToUI(tab.dto);
     restoreResponse(tab);
+    if ($('resHistory').classList.contains('active')) loadResponseHistory();
     setSending(!!tab.inFlight);
     if (tab.inFlight) showResponseLoading();
     renderTabs();
@@ -720,7 +721,10 @@ async function sendRequest() {
             const names = result.captures.filter(c => c.ok).map(c => `{{${c.name}}}`).join(', ');
             setTimeout(() => toast(`Saved ${names} to ${result.captureEnvironment}`), isScifi() ? 1800 : 0);
         }
-        if (tab.id === state.activeTabId) displayResponse(result);
+        if (tab.id === state.activeTabId) {
+            displayResponse(result);
+            if ($('resHistory').classList.contains('active')) loadResponseHistory();
+        }
         if (state.sidebarTab === 'history') loadHistory();
     } catch (e) {
         if (tab.id === state.activeTabId) {
@@ -881,14 +885,301 @@ function renderResponseBody(result) {
         el.querySelector('iframe').srcdoc = body;
         return;
     }
+    let tree = null;
     if (mode === 'pretty' && body.length < 3_000_000) {
         try {
-            JSON.parse(body); // validate only; formatting works on the original text so big numbers survive
-            el.innerHTML = '<pre>' + highlightJson(prettyJson(body)) + '</pre>';
-            return;
-        } catch (e) { /* not JSON: fall through to raw */ }
+            JSON.parse(body); // validate; the lossless parser below keeps big numbers exactly as sent
+            tree = body.length < 1_500_000 ? parseJsonLossless(body) : null;
+            if (!tree) el.innerHTML = '<pre>' + highlightJson(prettyJson(body)) + '</pre>';
+        } catch (e) { tree = null; mode = 'raw'; }
     }
-    el.innerHTML = '<pre>' + esc(body) + '</pre>';
+    setJsonTools(!!tree);
+    if (tree) {
+        const q = $('jsonFilter').value.trim();
+        if (q) {
+            try {
+                const found = jsonPath(tree, q);
+                el.innerHTML = `<div class="jp-result-head">${found.length} match${found.length === 1 ? '' : 'es'} for <code>${esc(q.startsWith('$') ? q : '$' + q)}</code></div>` + jsonTreeHtml({ t: 'a', items: found });
+            } catch (e) {
+                el.innerHTML = `<div style="padding:12px"><div class="error-box">Invalid JSONPath: ${esc(e.message)}</div></div>`;
+            }
+        } else {
+            el.innerHTML = jsonTreeHtml(tree);
+        }
+    } else if (mode !== 'pretty' || !el.querySelector('pre')) {
+        el.innerHTML = '<pre>' + esc(body) + '</pre>';
+    }
+    if ($('resSearch').classList.contains('active')) runResponseSearch();
+}
+
+function setJsonTools(on) {
+    $('jsonFilterBox').style.display = on || $('jsonFilter').value ? '' : 'none';
+    $('treeCollapseBtn').style.display = on ? '' : 'none';
+    $('treeExpandBtn').style.display = on ? '' : 'none';
+}
+
+// ---------- Lossless JSON tree (numbers stay as their original text) ----------
+function parseJsonLossless(src) {
+    let i = 0;
+    const lit = /-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|true|false|null/y;
+    const ws = () => { while (i < src.length && (src[i] === ' ' || src[i] === '\n' || src[i] === '\r' || src[i] === '\t')) i++; };
+    const str = () => {
+        const start = i++;
+        while (src[i] !== '"') i += src[i] === '\\' ? 2 : 1;
+        i++;
+        return src.slice(start, i);
+    };
+    const val = () => {
+        ws();
+        const c = src[i];
+        if (c === '{') {
+            i++; const e = [];
+            ws(); if (src[i] === '}') { i++; return { t: 'o', e }; }
+            for (;;) {
+                ws(); const raw = str(); ws(); i++; // ':'
+                e.push([JSON.parse(raw), raw, val()]);
+                ws(); if (src[i++] === '}') break;
+            }
+            return { t: 'o', e };
+        }
+        if (c === '[') {
+            i++; const items = [];
+            ws(); if (src[i] === ']') { i++; return { t: 'a', items }; }
+            for (;;) { items.push(val()); ws(); if (src[i++] === ']') break; }
+            return { t: 'a', items };
+        }
+        if (c === '"') return { t: 's', raw: str() };
+        lit.lastIndex = i;
+        const m = lit.exec(src);
+        i = lit.lastIndex;
+        return { t: m[0] === 'null' ? 'null' : m[0] === 'true' || m[0] === 'false' ? 'bool' : 'num', raw: m[0] };
+    };
+    return val();
+}
+
+function jsonTreeHtml(node) {
+    const out = [];
+    const walk = (n, keyRaw, last) => {
+        const key = keyRaw != null ? `<span class="j-key">${esc(keyRaw)}</span>: ` : '';
+        const comma = last ? '' : ',';
+        if (n.t === 'o' || n.t === 'a') {
+            const kids = n.t === 'o' ? n.e : n.items;
+            const [open, close] = n.t === 'o' ? ['{', '}'] : ['[', ']'];
+            if (!kids.length) { out.push(`<div class="jl">${key}<span class="jp">${open}${close}</span>${comma}</div>`); return; }
+            out.push(`<div class="jt"><div class="jl jt-head"><span class="jt-tog"></span>${key}<span class="jp">${open}</span><span class="jt-sum">${kids.length} ${n.t === 'o' ? (kids.length === 1 ? 'key' : 'keys') : (kids.length === 1 ? 'item' : 'items')} ${close}${comma}</span></div><div class="jt-children">`);
+            kids.forEach((k, idx) => n.t === 'o' ? walk(k[2], k[1], idx === kids.length - 1) : walk(k, null, idx === kids.length - 1));
+            out.push(`</div><div class="jl jt-close"><span class="jp">${close}</span>${comma}</div></div>`);
+            return;
+        }
+        const cls = n.t === 's' ? 'j-str' : n.t === 'num' ? 'j-num' : n.t === 'bool' ? 'j-bool' : 'j-null';
+        out.push(`<div class="jl">${key}<span class="${cls}">${esc(n.raw)}</span>${comma}</div>`);
+    };
+    walk(node, null, true);
+    return `<div class="json-tree">${out.join('')}</div>`;
+}
+
+function setTreeCollapsed(collapsed) {
+    document.querySelectorAll('#responseBody .jt').forEach((el, i) => el.classList.toggle('collapsed', collapsed && i > 0));
+}
+
+// ---------- JSONPath subset: $ . .. * [n] [*] ['key'] ----------
+function jsonPath(root, expr) {
+    let p = expr.trim();
+    if (p.startsWith('$')) p = p.slice(1);
+    const segs = [];
+    const re = /^(?:\.\.([\w$-]+|\*)|\.([\w$-]+|\*)|\[\s*(-?\d+)\s*\]|\[\s*\*\s*\]|\[\s*(['"])(.*?)\4\s*\])/;
+    while (p.length) {
+        const m = re.exec(p);
+        if (!m) throw new Error(`unexpected "${p.slice(0, 20)}"`);
+        if (m[1] != null) segs.push({ deep: true, name: m[1] });
+        else if (m[2] != null) segs.push({ name: m[2] });
+        else if (m[3] != null) segs.push({ index: +m[3] });
+        else if (m[5] != null) segs.push({ name: m[5] });
+        else segs.push({ name: '*' });
+        p = p.slice(m[0].length);
+    }
+    const children = n => n.t === 'o' ? n.e.map(e => e[2]) : n.t === 'a' ? n.items : [];
+    const childNamed = (n, name) => {
+        if (name === '*') return children(n);
+        if (n.t === 'o') return n.e.filter(e => e[0] === name).map(e => e[2]);
+        return [];
+    };
+    const descendants = n => [n, ...children(n).flatMap(descendants)];
+    let cur = [root];
+    for (const s of segs) {
+        if (s.deep) cur = cur.flatMap(descendants).flatMap(n => childNamed(n, s.name));
+        else if (s.index != null) cur = cur.flatMap(n => n.t === 'a' ? [n.items[s.index < 0 ? n.items.length + s.index : s.index]].filter(Boolean) : []);
+        else cur = cur.flatMap(n => childNamed(n, s.name));
+    }
+    return cur;
+}
+
+// ---------- Find in response ----------
+const resSearch = { hits: [], index: 0 };
+
+function openResponseSearch() {
+    if (!activeTab()?.result) return;
+    selectTab('resTabsBar', 'resBody');
+    $('resSearch').classList.add('active');
+    const input = $('resSearchInput');
+    input.focus(); input.select();
+    runResponseSearch();
+}
+
+function closeResponseSearch() {
+    $('resSearch').classList.remove('active');
+    clearSearchMarks();
+    $('resSearchCount').textContent = '';
+}
+
+function clearSearchMarks() {
+    document.querySelectorAll('#responseBody mark.hit').forEach(m => m.replaceWith(document.createTextNode(m.textContent)));
+    $('responseBody').normalize();
+    resSearch.hits = [];
+}
+
+function runResponseSearch() {
+    clearSearchMarks();
+    const q = $('resSearchInput').value;
+    if (!q) { $('resSearchCount').textContent = ''; return; }
+    const ql = q.toLowerCase();
+    const walker = document.createTreeWalker($('responseBody'), NodeFilter.SHOW_TEXT);
+    const nodes = [];
+    while (walker.nextNode()) nodes.push(walker.currentNode);
+    for (const node of nodes) {
+        const text = node.nodeValue, lower = text.toLowerCase();
+        let at = lower.indexOf(ql);
+        if (at < 0) continue;
+        const frag = document.createDocumentFragment();
+        let last = 0;
+        while (at >= 0 && resSearch.hits.length < 5000) {
+            frag.appendChild(document.createTextNode(text.slice(last, at)));
+            const mark = document.createElement('mark');
+            mark.className = 'hit';
+            mark.textContent = text.slice(at, at + q.length);
+            frag.appendChild(mark);
+            resSearch.hits.push(mark);
+            last = at + q.length;
+            at = lower.indexOf(ql, last);
+        }
+        frag.appendChild(document.createTextNode(text.slice(last)));
+        node.replaceWith(frag);
+    }
+    resSearch.index = 0;
+    focusSearchHit();
+}
+
+function stepResponseSearch(d) {
+    if (!resSearch.hits.length) return;
+    resSearch.index = (resSearch.index + d + resSearch.hits.length) % resSearch.hits.length;
+    focusSearchHit();
+}
+
+function focusSearchHit() {
+    const n = resSearch.hits.length;
+    $('resSearchCount').textContent = n ? `${resSearch.index + 1} / ${n}${n >= 5000 ? '+' : ''}` : 'No matches';
+    resSearch.hits.forEach((m, i) => m.classList.toggle('current', i === resSearch.index));
+    const cur = resSearch.hits[resSearch.index];
+    if (!cur) return;
+    for (let jt = cur.closest('.jt.collapsed'); jt; jt = jt.parentElement?.closest('.jt.collapsed')) jt.classList.remove('collapsed');
+    cur.scrollIntoView({ block: 'center' });
+}
+
+// ---------- Response history & diff (saved requests) ----------
+const respHistory = { items: [], selected: [], requestId: null };
+
+async function loadResponseHistory() {
+    const tab = activeTab();
+    const el = $('responseHistory');
+    if (!tab?.requestId) {
+        el.innerHTML = '<div class="empty-state"><div>Save this request to keep a history of its responses</div></div>';
+        return;
+    }
+    respHistory.requestId = tab.requestId;
+    respHistory.selected = [];
+    try { respHistory.items = await api('GET', `/api/requests/${tab.requestId}/history`); } catch (e) { respHistory.items = []; }
+    renderResponseHistory();
+}
+
+function renderResponseHistory() {
+    const el = $('responseHistory');
+    if (!respHistory.items.length) { el.innerHTML = '<div class="empty-state"><div>No responses yet. Send this request to start its history</div></div>'; return; }
+    const sel = respHistory.selected;
+    el.innerHTML = `<div class="rh-bar"><span class="hint">${sel.length === 2 ? 'Comparing the two selected responses' : 'Tick two responses to compare them'}</span>${sel.length === 2 ? '<button class="btn btn-sm" onclick="respHistory.selected=[];renderResponseHistory()">Clear</button>' : ''}</div>
+        <div class="rh-list">${respHistory.items.map((h, i) => `<label class="rh-row${sel.includes(i) ? ' selected' : ''}">
+            <input type="checkbox" data-rh="${i}" ${sel.includes(i) ? 'checked' : ''}>
+            <span class="status-badge ${statusClass(h.statusCode)}">${h.statusCode || 'ERR'}</span>
+            <span class="rh-time">${new Date(h.executedAt).toLocaleString()}</span>
+            <span class="hint">${h.responseTimeMs != null ? formatMs(h.responseTimeMs) : ''} · ${formatBytes(h.responseSizeBytes)}</span>
+            <button class="btn btn-ghost btn-sm" data-rh-view="${i}">View</button>
+        </label>`).join('')}</div>
+        <div id="rhDetail"></div>`;
+    if (sel.length === 2) showDiff(respHistory.items[Math.max(...sel)], respHistory.items[Math.min(...sel)]);
+}
+
+function prettyText(body) {
+    try { JSON.parse(body); return prettyJson(body); } catch (e) { return body || ''; }
+}
+
+function showDiff(older, newer) {
+    const a = prettyText(older.responseBody).split('\n'), b = prettyText(newer.responseBody).split('\n');
+    const el = $('rhDetail');
+    if (a.length * b.length > 4_000_000) { el.innerHTML = '<div class="hint" style="padding:12px">These responses are too large to diff in the browser.</div>'; return; }
+    // LCS table, then walk it to produce the line diff
+    const n = a.length, m = b.length;
+    const dp = Array.from({ length: n + 1 }, () => new Uint32Array(m + 1));
+    for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--) dp[i][j] = a[i] === b[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+    const lines = [];
+    let i = 0, j = 0, adds = 0, dels = 0;
+    while (i < n && j < m) {
+        if (a[i] === b[j]) { lines.push([' ', a[i]]); i++; j++; }
+        else if (dp[i + 1][j] >= dp[i][j + 1]) { lines.push(['-', a[i++]]); dels++; }
+        else { lines.push(['+', b[j++]]); adds++; }
+    }
+    while (i < n) { lines.push(['-', a[i++]]); dels++; }
+    while (j < m) { lines.push(['+', b[j++]]); adds++; }
+    const when = h => new Date(h.executedAt).toLocaleTimeString();
+    el.innerHTML = `<div class="diff-head"><span>${when(older)} → ${when(newer)}</span><span class="diff-add">+${adds}</span><span class="diff-del">−${dels}</span>${!adds && !dels ? '<span class="hint">Identical bodies</span>' : ''}</div>
+        <pre class="diff">${lines.map(([t, l]) => `<div class="d${t === '+' ? 'a' : t === '-' ? 'd' : 'n'}"><span class="dm">${t}</span>${esc(l)}</div>`).join('')}</pre>`;
+}
+
+function viewHistoryResponse(i) {
+    const h = respHistory.items[i];
+    const body = h.responseBody || '';
+    let html;
+    try { JSON.parse(body); html = highlightJson(prettyJson(body)); } catch (e) { html = esc(body); }
+    $('rhDetail').innerHTML = `<div class="diff-head"><span>${new Date(h.executedAt).toLocaleString()}</span><span class="status-badge ${statusClass(h.statusCode)}">${h.statusCode || 'ERR'}</span></div><pre class="diff">${html}</pre>`;
+}
+
+function initResponseTools() {
+    $('jsonFilter').addEventListener('input', debounce(() => { const r = activeTab()?.result; if (r?.success) renderResponseBody(r); }, 250));
+    $('resSearchInput').addEventListener('input', debounce(runResponseSearch, 150));
+    $('resSearchInput').addEventListener('keydown', e => {
+        if (e.key === 'Enter') { e.preventDefault(); stepResponseSearch(e.shiftKey ? -1 : 1); }
+        if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeResponseSearch(); }
+    });
+    $('responseBody').addEventListener('click', e => {
+        const head = e.target.closest('.jt-head');
+        if (head && (e.target.closest('.jt-tog') || e.target.closest('.jt-sum') || e.target.closest('.jp'))) head.parentElement.classList.toggle('collapsed');
+    });
+    $('responseHistory').addEventListener('change', e => {
+        const cb = e.target.closest('[data-rh]');
+        if (!cb) return;
+        const i = +cb.dataset.rh;
+        respHistory.selected = cb.checked ? [...respHistory.selected, i].slice(-2) : respHistory.selected.filter(x => x !== i);
+        renderResponseHistory();
+    });
+    $('responseHistory').addEventListener('click', e => {
+        const v = e.target.closest('[data-rh-view]');
+        if (v) { e.preventDefault(); viewHistoryResponse(+v.dataset.rhView); }
+    });
+    $('resTabsBar').addEventListener('click', e => { if (e.target.closest('[data-panel=resHistory]')) loadResponseHistory(); });
+    document.addEventListener('keydown', e => {
+        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'f' && activeTab()?.result && !document.querySelector('.modal-overlay.active')) {
+            e.preventDefault();
+            openResponseSearch();
+        }
+    });
 }
 
 /** Re-indents valid JSON text without parsing values, so 12345678901234567890 and 1.0 stay exactly as sent. */
@@ -2572,6 +2863,7 @@ async function init() {
     initThemedSelects();
     initPalette();
     initVariableHelpers();
+    initResponseTools();
     updateThemeButton();
     renderHud();
     bootSequence();
