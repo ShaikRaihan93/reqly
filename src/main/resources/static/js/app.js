@@ -115,8 +115,22 @@ const state = {
 // ============================================================
 // Dialogs & modals
 // ============================================================
-function openModal(id) { tooltip.hide(); $(id).classList.add('active'); }
-function closeModal(id) { $(id).classList.remove('active'); }
+const modalReturnFocus = {};
+function openModal(id) {
+    tooltip.hide();
+    const m = $(id);
+    modalReturnFocus[id] = document.activeElement;
+    m.classList.add('active');
+    m.setAttribute('role', 'dialog');
+    m.setAttribute('aria-modal', 'true');
+    // move focus into the dialog unless the caller focuses something specific right after
+    setTimeout(() => { if (!m.contains(document.activeElement)) m.querySelector('input:not([type=hidden]), textarea, select, button.btn-primary, button')?.focus(); }, 40);
+}
+function closeModal(id) {
+    $(id).classList.remove('active');
+    const back = modalReturnFocus[id];
+    if (back && document.contains(back)) back.focus();
+}
 
 let dialogResolve = null;
 /** Styled replacement for alert/confirm/prompt. Resolves to true/false, or the input value/null. */
@@ -1458,7 +1472,7 @@ function bulkErrorsHtml(s) {
 
 function selectTab(barId, panelId) {
     const bar = $(barId);
-    bar.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.panel === panelId));
+    bar.querySelectorAll('.tab').forEach(t => { t.classList.toggle('active', t.dataset.panel === panelId); t.setAttribute('aria-selected', t.dataset.panel === panelId); });
     const content = bar.closest('.request-panel, .response-panel').querySelector('.tab-content');
     content.querySelectorAll(':scope > .tab-panel').forEach(p => p.classList.toggle('active', p.id === panelId));
 }
@@ -1814,7 +1828,7 @@ function renderSidebar() {
 function folderHtml(f, depth, forceOpen) {
     const open = forceOpen || state.expanded.has(f.id);
     const count = countRequests(f);
-    let html = `<div class="tree-row${depth === 0 ? ' collection-root' : ''}${open ? ' open' : ''}" data-type="folder" data-id="${f.id}" draggable="true" style="padding-left:${4 + depth * 14}px">
+    let html = `<div class="tree-row${depth === 0 ? ' collection-root' : ''}${open ? ' open' : ''}" data-type="folder" data-id="${f.id}" draggable="true" style="padding-left:${4 + depth * 14}px" role="treeitem" tabindex="-1" aria-expanded="${open}" aria-label="${esc(f.name)}, folder, ${count} requests">
         ${icon('chevron', 'chev')}${icon(depth === 0 ? 'collection' : 'folder', 'folder-icon')}
         <span class="tree-name">${hl(f.name)}</span><span class="tree-count">${count || ''}</span>
         <span class="row-actions"><button class="icon-btn" data-action="add-request" title="Add request to this folder">${icon('plus')}</button><button class="icon-btn" data-action="menu" title="More actions">${icon('more')}</button></span>
@@ -1827,7 +1841,7 @@ function folderHtml(f, depth, forceOpen) {
 }
 
 function requestHtml(r, depth) {
-    return `<div class="tree-row" data-type="request" data-id="${r.id}" draggable="true" style="padding-left:${4 + depth * 14}px">
+    return `<div class="tree-row" data-type="request" data-id="${r.id}" draggable="true" style="padding-left:${4 + depth * 14}px" role="treeitem" tabindex="-1" aria-label="${esc(r.method)} ${esc(r.name || r.url)}">
         <span class="method-badge method-${methodClass(r.method)}">${shortMethod(r.method)}</span>
         <span class="tree-name">${hl(r.name || r.url)}</span>
         <span class="row-actions"><button class="icon-btn" data-action="menu" title="More actions">${icon('more')}</button></span>
@@ -3039,6 +3053,77 @@ async function signOut() {
 }
 
 // ============================================================
+// Accessibility
+// ============================================================
+/** Icon-only controls get their tooltip text as an accessible name (the tooltip system removes title). */
+function nameForAssistiveTech(el, text) {
+    if (!text || el.hasAttribute('aria-label') || el.textContent.trim()) return;
+    if (el.matches('button, a, input, select, textarea, [role=button], [tabindex]')) el.setAttribute('aria-label', text.split('\n')[0]);
+}
+
+function initAccessibility() {
+    document.querySelectorAll('[title]').forEach(el => nameForAssistiveTech(el, el.getAttribute('title')));
+    document.querySelectorAll('[data-tip]').forEach(el => nameForAssistiveTech(el, el.dataset.tip));
+    document.querySelectorAll('.tabs').forEach(bar => {
+        bar.setAttribute('role', 'tablist');
+        bar.querySelectorAll('.tab').forEach(t => { t.setAttribute('role', 'tab'); t.tabIndex = 0; t.setAttribute('aria-selected', t.classList.contains('active')); });
+    });
+    // tabs and other clickable divs respond to Enter / Space
+    document.addEventListener('keydown', e => {
+        if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.tab, .sidebar-tab, .req-tab, .snippet, .folder-option, .env-item')) {
+            e.preventDefault();
+            e.target.click();
+        }
+    });
+    document.querySelectorAll('.sidebar-tab, .snippet').forEach(el => { el.tabIndex = 0; el.setAttribute('role', 'button'); });
+    $('sidebarList').setAttribute('role', 'tree');
+    $('sidebarList').setAttribute('aria-label', 'Collections');
+    $('toast').setAttribute('role', 'status');
+    $('toast').setAttribute('aria-live', 'polite');
+    $('responseBody').setAttribute('aria-live', 'polite');
+    $('responseBody').setAttribute('aria-label', 'Response body');
+    $('urlInput').setAttribute('aria-label', 'Request URL');
+    $('methodSelect').setAttribute('aria-label', 'HTTP method');
+    $('sidebarSearch').setAttribute('aria-label', 'Search');
+
+    // Arrow keys move through the sidebar tree; Enter opens; Left/Right collapse/expand folders
+    $('sidebarList').addEventListener('keydown', e => {
+        const row = e.target.closest('.tree-row');
+        if (!row || e.target.closest('.rename-input')) return;
+        const rows = [...$('sidebarList').querySelectorAll('.tree-row')];
+        const i = rows.indexOf(row);
+        const focusRow = r => { if (r) { rows.forEach(x => { x.tabIndex = -1; }); r.tabIndex = 0; r.focus(); } };
+        if (e.key === 'ArrowDown') { e.preventDefault(); focusRow(rows[i + 1]); }
+        else if (e.key === 'ArrowUp') { e.preventDefault(); focusRow(rows[i - 1]); }
+        else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); row.click(); }
+        else if ((e.key === 'ArrowRight' && !row.classList.contains('open')) || (e.key === 'ArrowLeft' && row.classList.contains('open'))) {
+            if (row.dataset.type !== 'folder') return;
+            e.preventDefault();
+            const id = row.dataset.id;
+            toggleFolder(+id);
+            focusRow($('sidebarList').querySelector(`.tree-row[data-type=folder][data-id="${id}"]`));
+        } else if (e.key === 'F2') { e.preventDefault(); startRename(row.dataset.type, +row.dataset.id); }
+        else if (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) {
+            e.preventDefault();
+            const r = row.getBoundingClientRect();
+            const ev = { preventDefault() {}, stopPropagation() {}, target: row, clientX: r.left + 40, clientY: r.bottom };
+            row.dataset.type === 'folder' ? folderMenu(ev, +row.dataset.id, row) : requestMenu(ev, +row.dataset.id, row);
+        }
+    });
+    // name icon buttons that are rendered later (table rows, tree rows, menus, dialogs)
+    new MutationObserver(muts => muts.forEach(m => m.addedNodes.forEach(n => {
+        if (n.nodeType !== 1) return;
+        [n, ...n.querySelectorAll('[title], [data-tip]')].forEach(el => {
+            const t = el.getAttribute?.('title') || el.dataset?.tip;
+            if (t) nameForAssistiveTech(el, t);
+        });
+    }))).observe(document.body, { childList: true, subtree: true });
+    // the first row is reachable with Tab
+    new MutationObserver(() => { const first = $('sidebarList').querySelector('.tree-row'); if (first && !$('sidebarList').querySelector('.tree-row[tabindex="0"]')) first.tabIndex = 0; })
+        .observe($('sidebarList'), { childList: true });
+}
+
+// ============================================================
 // Command palette (⌘K): jump to any request/folder/environment or run an action
 // ============================================================
 const palette = { items: [], results: [], index: 0 };
@@ -3357,6 +3442,7 @@ function initTooltips() {
             const t = el.getAttribute('title');
             el.removeAttribute('title');
             if (t) el.dataset.tip = t;
+            nameForAssistiveTech(el, t);
         }
         current = el;
         // Show quickly when moving between tooltips, like native UIs do
@@ -3382,6 +3468,7 @@ async function init() {
     initUrlVarTooltips();
     initThemedSelects();
     initPalette();
+    initAccessibility();
     initVariableHelpers();
     initResponseTools();
     initFormDataEditor();
