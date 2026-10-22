@@ -2551,7 +2551,7 @@ async function startRunner() {
         stats.time += result.responseTimeMs || 0;
         if (!result.success) { stats.errors++; failed = true; }
         if (passed < tests.length) failed = true;
-        runner.report.results.push({ iteration: it, request: item.name, path: item.path, method: item.method, url: item.url, data: rowVars, status: result.statusCode || null, timeMs: result.responseTimeMs ?? null, error: result.success ? null : result.error, tests: tests.map(t => ({ name: t.testName, passed: t.passed, message: t.message })), captures: (result.captures || []).map(c => ({ name: c.name, ok: c.ok })) });
+        runner.report.results.push({ iteration: it, requestId: item.id, request: item.name, path: item.path, method: item.method, url: item.url, data: rowVars, status: result.statusCode || null, timeMs: result.responseTimeMs ?? null, error: result.success ? null : result.error, tests: tests.map(t => ({ name: t.testName, passed: t.passed, message: t.message })), captures: (result.captures || []).map(c => ({ name: c.name, ok: c.ok })) });
         const row = document.createElement('div');
         row.className = 'run-row';
         row.innerHTML = `<div class="run-row-head">
@@ -2572,13 +2572,15 @@ async function startRunner() {
         if (delay) await new Promise(r => setTimeout(r, delay));
     };
 
-    // Each iteration runs its requests in order, or with up to `parallel` in flight at once
-    for (let it = 1; it <= iterations && !runner.stop; it++) {
-        const rowVars = data ? data.rows[it - 1] : null;
-        const queue = [...selected];
-        const worker = async () => { while (queue.length && !runner.stop) await runOne(queue.shift(), it, rowVars); };
-        await Promise.all(Array.from({ length: Math.min(parallel, queue.length) }, worker));
-    }
+    // Every request of every iteration (data row) goes through one queue: in order with Parallel = 1,
+    // otherwise up to `parallel` in flight at once, across iteration boundaries too
+    const queue = [];
+    for (let it = 1; it <= iterations; it++) selected.forEach(item => queue.push([item, it, data ? data.rows[it - 1] : null]));
+    const worker = async () => { while (queue.length && !runner.stop) await runOne(...queue.shift()); };
+    await Promise.all(Array.from({ length: Math.min(parallel, queue.length) }, worker));
+    // Parallel runs finish out of order; keep the report in run order
+    const order = r => selected.findIndex(s => s.id === r.requestId);
+    runner.report.results.sort((a, b) => a.iteration - b.iteration || order(a) - order(b));
 
     runner.running = false;
     runner.report.finishedAt = new Date().toISOString();

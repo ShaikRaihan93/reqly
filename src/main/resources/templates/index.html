@@ -511,7 +511,7 @@
                     <div style="display:flex;gap:10px">
                         <div style="flex:1"><label class="field-label">Iterations</label><input type="number" class="input" id="runnerIterations" title="Run the selected requests this many times" value="1" min="1" max="1000"></div>
                         <div style="flex:1"><label class="field-label">Delay (ms)</label><input type="number" class="input" id="runnerDelay" title="Pause between requests, in milliseconds" value="0" min="0" max="60000"></div>
-                        <div style="flex:1"><label class="field-label">Parallel</label><select class="select" id="runnerParallel" title="How many requests of an iteration run at the same time.&#10;Keep 1 when requests depend on each other (e.g. captured variables)."><option value="1">1</option><option value="2">2</option><option value="4">4</option><option value="8">8</option></select></div>
+                        <div style="flex:1"><label class="field-label">Parallel</label><select class="select" id="runnerParallel" title="How many requests run at the same time, across all iterations and data rows (6 at most: the browser engine allows 6 connections to Reqly at once).&#10;Keep 1 when requests depend on each other (e.g. captured variables)."><option value="1">1</option><option value="2">2</option><option value="4">4</option><option value="6">6</option></select></div>
                     </div>
                     <div>
                         <label class="field-label">Data file <span class="muted">· optional</span></label>
