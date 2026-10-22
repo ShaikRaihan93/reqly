@@ -48,6 +48,9 @@
 
     <div class="header">
         <div class="logo"><img src="/favicon.svg" alt="">Reqly</div>
+        <button class="palette-trigger" onclick="openPalette()" title="Search requests, folders, environments and actions" data-tip-key="⌘K">
+            <svg class="i"><use href="#i-search"/></svg><span>Search or jump to…</span><span class="kbd">⌘K</span>
+        </button>
         <div class="header-actions">
             <div class="hud" title="Session telemetry: link status, requests transmitted, success rate">
                 <span class="link" id="hudLink"><i></i>LINK</span>
@@ -356,6 +359,15 @@
                     <div class="runner-rows" id="runnerRows"><div class="empty-state"><svg class="i"><use href="#i-play"/></svg><div>Pick requests and press Run</div></div></div>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- Command palette -->
+    <div class="palette-overlay" id="palette">
+        <div class="palette">
+            <div class="palette-input"><svg class="i"><use href="#i-search"/></svg><input type="text" id="paletteInput" placeholder="Search requests, folders, environments, actions…" autocomplete="off" spellcheck="false"><span class="kbd">esc</span></div>
+            <div class="palette-list" id="paletteList"></div>
+            <div class="palette-foot"><span><span class="kbd">↑</span><span class="kbd">↓</span> navigate</span><span><span class="kbd">↵</span> open</span><span><span class="kbd">esc</span> close</span></div>
         </div>
     </div>
 

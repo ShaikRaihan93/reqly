@@ -2154,6 +2154,147 @@ function initUrlVarTooltips() {
 }
 
 // ============================================================
+// Command palette (⌘K): jump to any request/folder/environment or run an action
+// ============================================================
+const palette = { items: [], results: [], index: 0 };
+
+function paletteSources() {
+    const items = [];
+    const walk = (folders, path) => folders.forEach(f => {
+        const p = [...path, f.name];
+        items.push({ kind: 'Folder', label: f.name, sub: path.join(' / '), icon: path.length ? 'folder' : 'collection', run: () => revealFolder(f.id) });
+        if (!path.length) items.push({ kind: 'Action', label: `Run ${f.name}`, sub: 'Collection runner', icon: 'play', run: () => openRunner(f.id) });
+        f.requests.forEach(r => items.push({ kind: 'Request', label: r.name, sub: p.join(' / ') + (r.url ? '  ·  ' + r.url : ''), method: r.method, run: () => openRequest(r.id) }));
+        walk(f.folders, p);
+    });
+    walk(state.tree.collections, []);
+    state.tree.requests.forEach(r => items.push({ kind: 'Request', label: r.name, sub: 'Unsorted' + (r.url ? '  ·  ' + r.url : ''), method: r.method, run: () => openRequest(r.id) }));
+    state.environments.forEach(e => items.push({ kind: 'Environment', label: `Use ${e.name}`, sub: String(e.id) === $('envSelect').value ? 'Active' : 'Switch environment', icon: 'settings', run: () => { $('envSelect').value = String(e.id); $('envSelect').dispatchEvent(new Event('change', { bubbles: true })); toast(`Environment: ${e.name}`); } }));
+    items.push({ kind: 'Environment', label: 'Use no environment', sub: 'Switch environment', icon: 'settings', run: () => { $('envSelect').value = ''; $('envSelect').dispatchEvent(new Event('change', { bubbles: true })); } });
+    const actions = [
+        ['New request tab', '⌥T', 'plus', () => newTab()],
+        ['New collection', '', 'collection', () => createFolder(null)],
+        ['Send request', MOD + '↵', 'send', () => sendOrCancel()],
+        ['Save request', MOD + 'S', 'file', () => saveCurrentRequest()],
+        ['Copy as cURL', '', 'copy', () => copyCurrentAsCurl()],
+        ['Code snippet…', '', 'copy', () => openSnippetModal?.()],
+        ['Import cURL / Postman / backup', '', 'import', () => openImportModal()],
+        ['Export everything (backup)', '', 'download', () => { location.href = '/api/export/all'; }],
+        ['Manage environments', '', 'settings', () => openEnvModal()],
+        ['Switch theme', '', 'theme', () => toggleTheme()],
+        ['Toggle sidebar', MOD + 'B', 'collection', () => toggleSidebar?.()],
+        ['Toggle side-by-side layout', '', 'collection', () => toggleLayout?.()],
+        ['Keyboard shortcuts', '?', 'keyboard', () => showShortcuts()],
+        ['Show history', '', 'history', () => switchSidebar('history')],
+    ];
+    actions.forEach(([label, key, ic, run]) => items.push({ kind: 'Action', label, sub: '', shortcut: key, icon: ic, run }));
+    return items;
+}
+
+/** Simple fuzzy score: contiguous matches and word starts rank highest; null = no match. */
+function fuzzyScore(text, q) {
+    const t = text.toLowerCase();
+    if (!q) return 0;
+    const at = t.indexOf(q);
+    if (at >= 0) return 100 - at + (at === 0 || /[\s/._-]/.test(t[at - 1]) ? 50 : 0);
+    let ti = 0, score = 0;
+    for (const ch of q) {
+        const found = t.indexOf(ch, ti);
+        if (found < 0) return null;
+        score += found === ti ? 3 : 1;
+        ti = found + 1;
+    }
+    return score;
+}
+
+function openPalette() {
+    palette.items = paletteSources();
+    $('palette').classList.add('active');
+    hideMenu(); tooltip.hide();
+    const input = $('paletteInput');
+    input.value = '';
+    input.focus();
+    renderPalette();
+}
+function closePalette() { $('palette').classList.remove('active'); }
+
+function renderPalette() {
+    const q = $('paletteInput').value.trim().toLowerCase();
+    const kindOrder = { Request: 0, Folder: 1, Environment: 2, Action: 3 };
+    palette.results = palette.items
+        .map(it => ({ it, score: q ? Math.max(fuzzyScore(it.label, q) ?? -1, (fuzzyScore(it.sub || '', q) ?? -1) - 40) : 0 }))
+        .filter(x => x.score >= 0)
+        .sort((a, b) => q ? b.score - a.score : kindOrder[a.it.kind] - kindOrder[b.it.kind])
+        .slice(0, 60).map(x => x.it);
+    if (!q) palette.results = [...palette.results.filter(r => r.kind === 'Action').slice(0, 6), ...palette.results.filter(r => r.kind === 'Request').slice(0, 12)];
+    palette.index = 0;
+    let last = null;
+    $('paletteList').innerHTML = palette.results.map((r, i) => {
+        const head = r.kind !== last ? `<div class="palette-section">${r.kind === 'Request' ? 'Requests' : r.kind === 'Folder' ? 'Folders' : r.kind === 'Environment' ? 'Environments' : 'Actions'}</div>` : '';
+        last = r.kind;
+        const lead = r.method ? `<span class="method-badge method-${methodClass(r.method)}">${shortMethod(r.method)}</span>` : icon(r.icon || 'chevron');
+        return `${head}<div class="palette-item${i === 0 ? ' active' : ''}" data-i="${i}">${lead}<span class="palette-label">${hlQuery(r.label, q)}</span><span class="palette-sub">${esc(r.sub || '')}</span>${r.shortcut ? `<span class="kbd">${esc(r.shortcut)}</span>` : ''}</div>`;
+    }).join('') || `<div class="palette-empty">Nothing matches “${esc(q)}”</div>`;
+}
+
+function hlQuery(text, q) {
+    if (!q) return esc(text);
+    const i = text.toLowerCase().indexOf(q);
+    return i < 0 ? esc(text) : esc(text.slice(0, i)) + '<mark>' + esc(text.slice(i, i + q.length)) + '</mark>' + esc(text.slice(i + q.length));
+}
+
+function movePalette(delta) {
+    const items = $('paletteList').querySelectorAll('.palette-item');
+    if (!items.length) return;
+    palette.index = (palette.index + delta + items.length) % items.length;
+    items.forEach((el, i) => el.classList.toggle('active', i === palette.index));
+    items[palette.index].scrollIntoView({ block: 'nearest' });
+}
+
+function runPaletteItem(i) {
+    const r = palette.results[i];
+    if (!r) return;
+    closePalette();
+    r.run();
+}
+
+function revealFolder(id) {
+    if (state.sidebarTab !== 'collections') switchSidebar('collections');
+    state.search = ''; $('sidebarSearch').value = '';
+    for (let f = findFolder(id); f; f = f.parentId != null ? findFolder(f.parentId) : null) state.expanded.add(f.id);
+    saveExpanded();
+    renderSidebar();
+    const row = document.querySelector(`.tree-row[data-type=folder][data-id="${id}"]`);
+    row?.scrollIntoView({ block: 'center' });
+    fx(row, 'fx-flash');
+    if (!isScifi() && row) { row.classList.add('menu-open'); setTimeout(() => row.classList.remove('menu-open'), 900); }
+}
+
+function initPalette() {
+    $('paletteInput').addEventListener('input', renderPalette);
+    $('paletteInput').addEventListener('keydown', e => {
+        if (e.key === 'ArrowDown') { e.preventDefault(); movePalette(1); }
+        else if (e.key === 'ArrowUp') { e.preventDefault(); movePalette(-1); }
+        else if (e.key === 'Enter') { e.preventDefault(); runPaletteItem(palette.index); }
+        else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closePalette(); }
+    });
+    $('paletteList').addEventListener('mousemove', e => {
+        const it = e.target.closest('.palette-item');
+        if (!it || +it.dataset.i === palette.index) return;
+        palette.index = +it.dataset.i;
+        $('paletteList').querySelectorAll('.palette-item').forEach((el, i) => el.classList.toggle('active', i === palette.index));
+    });
+    $('paletteList').addEventListener('click', e => { const it = e.target.closest('.palette-item'); if (it) runPaletteItem(+it.dataset.i); });
+    $('palette').addEventListener('mousedown', e => { if (e.target === $('palette')) closePalette(); });
+    document.addEventListener('keydown', e => {
+        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+            e.preventDefault();
+            $('palette').classList.contains('active') ? closePalette() : openPalette();
+        }
+    }, true);
+}
+
+// ============================================================
 // Theme & shortcuts help
 // ============================================================
 const THEMES = [['scifi', 'Sci-fi'], ['dark', 'Dark'], ['light', 'Light']];
@@ -2232,7 +2373,7 @@ function bootSequence() {
 }
 
 function showShortcuts() {
-    const rows = [[MOD + '↵', 'Send request'], [MOD + 'S', 'Save request'], ['Enter', 'Send (in the URL bar)'], ['⌥T', 'New tab'], ['⌥W', 'Close tab'], ['Esc', 'Close dialog / menu'], ['?', 'Show this list'],
+    const rows = [[MOD + 'K', 'Search & jump to anything'], [MOD + '↵', 'Send request'], [MOD + 'S', 'Save request'], ['Enter', 'Send (in the URL bar)'], ['⌥T', 'New tab'], ['⌥W', 'Close tab'], ['Esc', 'Close dialog / menu'], ['?', 'Show this list'],
         ['Double-click', 'Rename an item in the sidebar'], ['Right-click', 'Item and tab menus'], ['Middle-click', 'Close a tab'], ['Paste cURL', 'Into the URL bar to import it']];
     uiDialog({
         title: 'Keyboard shortcuts', okText: 'Close', alertOnly: true,
@@ -2297,6 +2438,7 @@ async function init() {
     initTooltips();
     initUrlVarTooltips();
     initThemedSelects();
+    initPalette();
     updateThemeButton();
     renderHud();
     bootSequence();
