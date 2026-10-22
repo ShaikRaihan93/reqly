@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reqly · The API client that stays on your machine</title>
+<meta name="description" content="Reqly is a fast, local-first API client for macOS. Build requests, test responses and run collections without sending your data or secrets to the cloud.">
+<meta property="og:title" content="Reqly · The API client that stays on your machine">
+<meta property="og:description" content="Build, test and automate APIs locally. No cloud account, encrypted secrets, Postman-style scripts.">
+<meta property="og:image" content="assets/img/hero.webp">
+<meta name="theme-color" content="#070a14">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="stylesheet" href="assets/styles.css">
+</head>
+<body data-page="home">
+<a class="skip" href="#main">Skip to content</a>
+<div data-site-header></div>
+
+<main id="main">
+  <section class="hero dark">
+    <div class="wrap">
+      <span class="eyebrow"><span class="dot"></span>Reqly <span data-site="version">1.0.0</span> for macOS is here</span>
+      <h1>The API client that <span class="grad-text">stays on your machine</span></h1>
+      <p class="lead">Design requests, test responses and automate whole collections in a fast native app. Your collections, tokens and responses never leave your laptop.</p>
+      <div class="cta-row">
+        <a class="btn btn-primary btn-lg" data-href="macDownload" href="download.html">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.4 12.6c0-2.4 2-3.6 2.1-3.7-1.1-1.7-2.9-1.9-3.5-1.9-1.5-.2-2.9.9-3.7.9-.8 0-1.9-.9-3.2-.8-1.6 0-3.1 1-4 2.4-1.7 3-.4 7.4 1.2 9.8.8 1.2 1.8 2.5 3 2.4 1.2 0 1.7-.8 3.1-.8 1.5 0 1.9.8 3.2.8 1.3 0 2.2-1.2 3-2.4.9-1.4 1.3-2.7 1.3-2.8 0 0-2.5-1-2.5-3.9zM14 5.4c.7-.8 1.1-1.9 1-3-1 0-2.1.7-2.8 1.5-.6.7-1.2 1.8-1 2.9 1.1.1 2.1-.6 2.8-1.4z"/></svg>
+          Download for macOS
+        </a>
+        <a class="btn btn-ghost btn-lg" href="#features">See what it does</a>
+      </div>
+      <p class="fine"><span>Free for personal use</span><span>macOS 12 or later</span><span>No sign-up in the cloud</span></p>
+      <div class="shot-frame"><div class="bar" aria-hidden="true"><i></i><i></i><i></i></div>
+        <img src="assets/img/hero.webp" width="2400" height="1500" alt="Reqly sending a POST sign-in request with an environment variable in the URL and showing a 200 OK JSON response">
+      </div>
+    </div>
+  </section>
+
+  <div class="trust dark">
+    <ul>
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>Secrets encrypted with AES-256</li>
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12h20M12 2a15 15 0 010 20M12 2a15 15 0 000 20"/><circle cx="12" cy="12" r="10"/></svg>Works fully offline</li>
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3l18 18M10.6 10.6a2 2 0 002.8 2.8M9.9 4.2A10 10 0 0122 12a13 13 0 01-2.1 3.1M6.6 6.6A13 13 0 002 12s3.6 7 10 7a9.7 9.7 0 005.4-1.6"/></svg>No analytics, no tracking</li>
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 17l6-6-6-6M12 19h8"/></svg>Imports Postman and cURL</li>
+    </ul>
+  </div>
+
+  <section class="block" id="features">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <span class="kicker">Everything you need</span>
+        <h2>One app for the whole API workflow</h2>
+        <p>From the first request to a full regression run, Reqly covers what you reach for every day, without the bloat.</p>
+      </div>
+      <div class="grid grid-3">
+        <div class="card reveal"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h18M3 12h18M3 17h12"/></svg></div>
+          <h3>Requests &amp; collections</h3><p>Every method and body type: JSON, form, multipart with files and GraphQL. Organise work in nested folders and tabs.</p></div>
+        <div class="card reveal"><div class="icon m"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H6a2 2 0 00-2 2v4l-2 3 2 3v4a2 2 0 002 2h2M16 3h2a2 2 0 012 2v4l2 3-2 3v4a2 2 0 01-2 2h-2"/></svg></div>
+          <h3>Environments &amp; variables</h3><p>Switch between staging and production in one click. <code>{{variables}}</code> are highlighted, previewed on hover and secrets stay masked.</p></div>
+        <div class="card reveal"><div class="icon g"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg></div>
+          <h3>Tests in one line</h3><p>Write <code>status == 200</code> or <code>json.user.name == "Ada"</code> and you are done. Capture values into variables to chain requests.</p></div>
+        <div class="card reveal"><div class="icon o"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 18l6-6-6-6M8 6l-6 6 6 6"/></svg></div>
+          <h3>Postman-style scripts</h3><p>Pre-request and post-response JavaScript with the familiar <code>pm</code> API and <code>console.log</code>, run in a locked-down sandbox.</p></div>
+        <div class="card reveal"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3l14 9-14 9V3z"/></svg></div>
+          <h3>Collection runner</h3><p>Run a whole folder with iterations, CSV or JSON data files and parallel requests. Export the report as HTML or JSON.</p></div>
+        <div class="card reveal"><div class="icon m"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></div>
+          <h3>Powerful response viewer</h3><p>Collapsible JSON tree that keeps big numbers exact, JSONPath filters, search, HTML preview and a diff of past responses.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block dark" id="tour">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <span class="kicker">Take the tour</span>
+        <h2>Built for how testers actually work</h2>
+        <p>Three themes, a command terminal, a console and keyboard shortcuts for everything.</p>
+      </div>
+      <div class="tabs" role="tablist" aria-label="Product tour">
+        <button class="tab" role="tab" id="t-test" aria-controls="p-test" aria-selected="true">Test</button>
+        <button class="tab" role="tab" id="t-run" aria-controls="p-run" aria-selected="false" tabindex="-1">Automate</button>
+        <button class="tab" role="tab" id="t-explore" aria-controls="p-explore" aria-selected="false" tabindex="-1">Explore</button>
+      </div>
+      <div class="panel" role="tabpanel" id="p-test" aria-labelledby="t-test">
+        <div class="showcase">
+          <div class="copy"><h3>Assertions without boilerplate</h3>
+            <p>Plain one-line checks for status, headers, JSON values and response time, with clear pass and fail messages.</p>
+            <ul><li>Snippets for the checks you write most</li><li>Capture tokens straight into your environment</li><li>Secret values stay masked in results</li></ul></div>
+          <div class="media"><img src="assets/img/tests.webp" width="2400" height="1500" loading="lazy" alt="Tests tab with four one-line assertions and a results panel showing three passed tests and a captured authToken variable"></div>
+        </div>
+      </div>
+      <div class="panel" role="tabpanel" id="p-run" aria-labelledby="t-run" hidden>
+        <div class="showcase">
+          <div class="copy"><h3>Run entire collections</h3>
+            <p>Pick an environment, a data file and how many requests to run in parallel, then watch every result arrive.</p>
+            <ul><li>Iterations with CSV or JSON test data</li><li>Stop on first failure, or run everything</li><li>Shareable HTML and JSON reports</li></ul></div>
+          <div class="media"><img src="assets/img/runner.webp" width="2400" height="1500" loading="lazy" alt="Collection runner for the Payments API collection: six requests all returning 200 OK with a Mission Complete banner"></div>
+        </div>
+      </div>
+      <div class="panel" role="tabpanel" id="p-explore" aria-labelledby="t-explore" hidden>
+        <div class="showcase">
+          <div class="copy"><h3>Read responses faster</h3>
+            <p>Pretty, raw and preview modes, a JSON tree you can fold, and JSONPath filters like <code>$.data[*].id</code>.</p>
+            <ul><li>Light, dark and sci-fi themes</li><li>Search inside large bodies</li><li>Compare any two past responses</li></ul></div>
+          <div class="media"><img src="assets/img/light.webp" width="2400" height="1500" loading="lazy" alt="Reqly in the light theme showing a POST create customer request and its JSON response tree"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block">
+    <div class="wrap">
+      <div class="split reveal">
+        <div>
+          <span class="kicker">Private by design</span>
+          <h2>Your API keys never leave your laptop</h2>
+          <p>Cloud-first API tools sync your workspaces, tokens and responses to someone else's servers. Reqly does the opposite: everything is stored in a local database on your Mac.</p>
+          <ul class="checks">
+            <li>Environment values, auth settings and headers encrypted at rest</li>
+            <li>Only reachable from your own computer, protected by your account</li>
+            <li>Automatic local backups, and one-click export whenever you want</li>
+            <li>No telemetry, ads or third-party scripts in the app</li>
+          </ul>
+        </div>
+        <div class="code" aria-label="Example of a Reqly test script">
+<span class="c">// Tests tab: one assertion per line</span>
+<span class="k">status</span> == <span class="n">200</span>
+<span class="k">json</span>.user.name == <span class="s">"Ada"</span>
+<span class="k">responseTime</span> &lt; <span class="n">500</span>
+<span class="k">header</span>.content-type contains <span class="s">json</span>
+
+<span class="c">// Save values for the next request</span>
+<span class="k">json</span>.token -&gt; <span class="v">authToken</span>
+
+<span class="c">// Or go further with scripts</span>
+pm.test(<span class="s">"has an id"</span>, () =&gt;
+  pm.expect(pm.response.json().user.id).to.be.a(<span class="s">"number"</span>));
+console.log(pm.environment.get(<span class="s">"authToken"</span>));</div>
+      </div>
+
+      <div class="split flip reveal">
+        <div>
+          <span class="kicker">Bring your work</span>
+          <h2>Switch over in minutes</h2>
+          <p>Import Postman collections and cURL commands, export them again any time, and copy any request as code for cURL, JavaScript, Python or Java.</p>
+          <ul class="checks">
+            <li>Postman collection import and export</li>
+            <li>Paste a cURL command to create a request</li>
+            <li>Full workspace backup and restore</li>
+          </ul>
+          <p style="margin-top:22px"><a class="btn btn-dark" href="download.html">Get Reqly</a></p>
+        </div>
+        <div class="media"><img src="assets/img/tests.webp" width="2400" height="1500" loading="lazy" alt="Reqly request editor with collections in the sidebar"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block dark">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <span class="kicker">Lightweight and quick</span>
+        <h2>Fast to learn, pleasant to use every day</h2>
+      </div>
+      <div class="stats">
+        <div class="stat reveal"><b>0</b><span>accounts in the cloud required</span></div>
+        <div class="stat reveal"><b>5</b><span>body types, from JSON to GraphQL</span></div>
+        <div class="stat reveal"><b>3</b><span>themes: sci-fi, dark and light</span></div>
+        <div class="stat reveal"><b>⌘K</b><span>to jump to any request or command</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block alt">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <span class="kicker">Questions</span>
+        <h2>Frequently asked</h2>
+      </div>
+      <div class="faq reveal">
+        <details><summary>Is Reqly free?</summary><p>Yes. Reqly is free for personal use, learning and evaluation. Professionals and companies using it for work can buy a Pro or Team license, see <a href="pricing.html">Pricing</a>.</p></details>
+        <details><summary>Where is my data stored?</summary><p>On your Mac, in the <code>reqly-data</code> folder in your home directory. Reqly has no servers that receive your requests, collections or responses. Sensitive values are encrypted with a key that only exists on your device.</p></details>
+        <details><summary>Do I need an internet connection?</summary><p>Only to reach the APIs you test. Reqly itself works fully offline, including against services on <code>localhost</code> or your company network.</p></details>
+        <details><summary>Can I import my Postman collections?</summary><p>Yes. Import Postman collection files (v2.1) from the Import menu, or paste any cURL command. You can export back to Postman format at any time.</p></details>
+        <details><summary>Which platforms are supported?</summary><p>Reqly <span data-site="version">1.0.0</span> runs on macOS 12 or later. Windows and Linux apps are on the roadmap; until then you can run Reqly from source with Java 17 on any system.</p></details>
+        <details><summary>How do updates work?</summary><p>New versions are published on the <a data-href="releases" href="#">releases page</a>. Download the new version and replace the app in Applications; your data stays where it is.</p></details>
+      </div>
+    </div>
+  </section>
+
+  <section class="final dark">
+    <div class="wrap reveal">
+      <h2>Start testing in under a minute</h2>
+      <p>Download Reqly, create your local account and send your first request. No credit card, no cloud sign-up.</p>
+      <div class="cta-row">
+        <a class="btn btn-primary btn-lg" href="download.html">Download Reqly</a>
+        <a class="btn btn-ghost btn-lg" href="pricing.html">View pricing</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div data-site-footer></div>
+<script src="assets/site.js"></script>
+</body>
+</html>

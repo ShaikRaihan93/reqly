@@ -6,6 +6,12 @@
       "runtimeExecutable": "./gradlew",
       "runtimeArgs": ["bootRun"],
       "port": 8899
+    },
+    {
+      "name": "website",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "8890", "--bind", "127.0.0.1", "--directory", "website"],
+      "port": 8890
     }
   ]
 }

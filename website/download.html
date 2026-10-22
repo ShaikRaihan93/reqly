@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Download Reqly</title>
+<meta name="description" content="Download Reqly for macOS. Free for personal use, bundles its own Java runtime, no cloud account needed.">
+<meta name="theme-color" content="#070a14">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="stylesheet" href="assets/styles.css">
+</head>
+<body data-page="download">
+<a class="skip" href="#main">Skip to content</a>
+<div data-site-header></div>
+
+<main id="main">
+  <section class="page-hero dark">
+    <div class="wrap">
+      <span class="kicker">Download</span>
+      <h1>Get Reqly</h1>
+      <p>Version <span data-site="version">1.0.0</span>, released <span data-site="released">October 2026</span>. Free for personal use, with everything included.</p>
+    </div>
+  </section>
+
+  <section class="block alt">
+    <div class="wrap">
+      <div class="dl-grid">
+        <div class="dl primary">
+          <div class="os"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.4 12.6c0-2.4 2-3.6 2.1-3.7-1.1-1.7-2.9-1.9-3.5-1.9-1.5-.2-2.9.9-3.7.9-.8 0-1.9-.9-3.2-.8-1.6 0-3.1 1-4 2.4-1.7 3-.4 7.4 1.2 9.8.8 1.2 1.8 2.5 3 2.4 1.2 0 1.7-.8 3.1-.8 1.5 0 1.9.8 3.2.8 1.3 0 2.2-1.2 3-2.4.9-1.4 1.3-2.7 1.3-2.8 0 0-2.5-1-2.5-3.9zM14 5.4c.7-.8 1.1-1.9 1-3-1 0-2.1.7-2.8 1.5-.6.7-1.2 1.8-1 2.9 1.1.1 2.1-.6 2.8-1.4z"/></svg><h3>macOS</h3></div>
+          <p>A native Mac app with its own window, Dock icon and menus. Includes everything it needs, so there is nothing else to install.</p>
+          <div class="meta"><span>Reqly-<span data-site="version">1.0.0</span>.dmg</span><span>about 115 MB</span><span>macOS 12+</span><span>Apple silicon &amp; Intel</span></div>
+          <a class="btn btn-primary btn-lg" data-href="macDownload" href="#">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0l-5-5m5 5l5-5M4 19h16"/></svg>Download for macOS</a>
+        </div>
+        <div class="dl">
+          <div class="os"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 5.5l7.5-1v7H3v-6zm0 13l7.5 1v-7H3v6zm8.5 1.1L21 21v-8.5h-9.5v7.1zm0-15.2v7.1H21V3l-9.5 1.4z"/></svg><h3>Windows</h3></div>
+          <p>A native Windows app is on the roadmap. Want it sooner? Let us know and we'll email you when it ships.</p>
+          <a class="btn btn-outline" href="contact.html?topic=Windows%20or%20Linux">Notify me</a>
+        </div>
+        <div class="dl">
+          <div class="os"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 17l6-6-6-6M12 19h8"/></svg><h3>Linux &amp; source</h3></div>
+          <p>Run Reqly on any system with Java 17 straight from the source code. Linux packages are planned.</p>
+          <a class="btn btn-outline" href="#source">Run from source</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block">
+    <div class="wrap">
+      <div class="section-head"><span class="kicker">Install</span><h2>Up and running in three steps</h2></div>
+      <ol class="steps">
+        <li><h3>Install</h3><p>Open the downloaded <code>.dmg</code> and drag <b>Reqly</b> into your Applications folder.</p></li>
+        <li><h3>Open</h3><p>Launch Reqly from Applications or Spotlight. The first launch takes a few seconds while it sets up its local database.</p></li>
+        <li><h3>Create your account</h3><p>Pick a name, email and password. The account lives only on your Mac and keeps your workspace private.</p></li>
+      </ol>
+      <div class="callout" style="margin-top:28px">
+        <b>macOS says Reqly is from an unidentified developer?</b> Right-click Reqly in Applications, choose <b>Open</b>, then confirm. You only need to do this once.
+      </div>
+    </div>
+  </section>
+
+  <section class="block alt" id="source">
+    <div class="wrap split">
+      <div>
+        <span class="kicker">For developers</span>
+        <h2>Run from source</h2>
+        <p>Reqly is a Spring Boot application. With Java 17 or newer installed, clone the repository and start it with Gradle, then open <code>http://localhost:8899</code> in your browser.</p>
+        <div class="term"><span class="p">$ </span>git clone https://github.com/ShaikRaihan93/reqly.git<br><span class="p">$ </span>cd reqly<br><span class="p">$ </span>./gradlew bootRun</div>
+        <p style="margin-top:18px"><a data-href="github" href="#">View the repository</a> · <a data-href="releases" href="#">All releases</a></p>
+      </div>
+      <div>
+        <h3>System requirements</h3>
+        <table class="req">
+          <tr><td>Operating system</td><td>macOS 12 Monterey or later</td></tr>
+          <tr><td>Processor</td><td>Apple silicon or Intel</td></tr>
+          <tr><td>Memory</td><td>4 GB RAM (Reqly uses under 800 MB)</td></tr>
+          <tr><td>Disk space</td><td>About 250 MB, plus your data</td></tr>
+          <tr><td>From source</td><td>Java 17+ on macOS, Windows or Linux</td></tr>
+        </table>
+        <div class="callout info" style="margin-top:22px">Your data is kept in <code>~/reqly-data</code>. Updating or reinstalling Reqly never touches it.</div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div data-site-footer></div>
+<script src="assets/site.js"></script>
+</body>
+</html>
