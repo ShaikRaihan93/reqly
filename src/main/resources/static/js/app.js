@@ -2443,7 +2443,8 @@ function renderRunnerPlan() {
     const d = runner.data;
     const selected = document.querySelectorAll('#runnerList [data-run]:checked').length;
     const iterations = d ? d.rows.length : Math.max(1, +$('runnerIterations').value || 1);
-    const total = selected * iterations;
+    const users = Math.max(1, +$('runnerParallel').value || 1);
+    const total = selected * iterations * (d ? 1 : users);
     $('runnerSummary').innerHTML = `<span class="muted">${runner.items.length} request${runner.items.length === 1 ? '' : 's'} in this folder</span>`;
     const PREVIEW = 8;
     const preview = d ? `<div class="data-preview">
@@ -2456,7 +2457,7 @@ function renderRunnerPlan() {
             <div class="plan-card">
                 <div class="plan-total">${total}</div>
                 <div><div class="plan-title">request${total === 1 ? '' : 's'} will be sent</div>
-                <div class="muted">${selected} selected × ${iterations} ${d ? `data row${iterations === 1 ? '' : 's'}` : `iteration${iterations === 1 ? '' : 's'}`}</div></div>
+                <div class="muted">${selected} selected × ${iterations} ${d ? `data row${iterations === 1 ? '' : 's'}` : `iteration${iterations === 1 ? '' : 's'}`}${d ? (users > 1 ? `, shared by ${users} parallel users` : '') : ` × ${users} parallel user${users === 1 ? '' : 's'}`}</div></div>
             </div>
             ${preview}
         </div>`;
@@ -2519,7 +2520,10 @@ async function startRunner() {
     setRunnerButton(true);
     $('runnerReportBtns').style.display = 'none';
     $('runnerRows').innerHTML = '';
-    const total = selected.length * iterations;
+    // Parallel = users running side by side. Without a data file each user runs every iteration
+    // (total = requests × iterations × users); with one, the users share the rows so each row runs once.
+    const users = parallel;
+    const total = selected.length * iterations * (data ? 1 : users);
     const stats = { done: 0, passed: 0, failed: 0, errors: 0, time: 0 };
     const started = Date.now();
     const updateSummary = () => {
@@ -2528,7 +2532,7 @@ async function startRunner() {
     };
     updateSummary();
 
-    const runOne = async (item, it, rowVars) => {
+    const runOne = async (item, it, rowVars, user) => {
         let result, failed = false;
         try {
             let dto = applyDataVars(await api('GET', `/api/requests/${item.id}`), rowVars);
@@ -2551,12 +2555,12 @@ async function startRunner() {
         stats.time += result.responseTimeMs || 0;
         if (!result.success) { stats.errors++; failed = true; }
         if (passed < tests.length) failed = true;
-        runner.report.results.push({ iteration: it, requestId: item.id, request: item.name, path: item.path, method: item.method, url: item.url, data: rowVars, status: result.statusCode || null, timeMs: result.responseTimeMs ?? null, error: result.success ? null : result.error, tests: tests.map(t => ({ name: t.testName, passed: t.passed, message: t.message })), captures: (result.captures || []).map(c => ({ name: c.name, ok: c.ok })) });
+        runner.report.results.push({ user, iteration: it, requestId: item.id, request: item.name, path: item.path, method: item.method, url: item.url, data: rowVars, status: result.statusCode || null, timeMs: result.responseTimeMs ?? null, error: result.success ? null : result.error, tests: tests.map(t => ({ name: t.testName, passed: t.passed, message: t.message })), captures: (result.captures || []).map(c => ({ name: c.name, ok: c.ok })) });
         const row = document.createElement('div');
         row.className = 'run-row';
         row.innerHTML = `<div class="run-row-head">
                 <span class="method-badge method-${methodClass(item.method)}">${shortMethod(item.method)}</span>
-                <span class="tree-name">${esc(item.name)}${iterations > 1 ? ` <span class="hint">#${it}</span>` : ''}${item.path ? ` <span class="hint">${esc(item.path)}</span>` : ''}</span>
+                <span class="tree-name">${esc(item.name)}${iterations > 1 ? ` <span class="hint">#${it}</span>` : ''}${users > 1 && !data ? ` <span class="hint">· user ${user}</span>` : ''}${item.path ? ` <span class="hint">${esc(item.path)}</span>` : ''}</span>
                 ${result.success ? `<span class="status-badge ${statusClass(result.statusCode)}">${result.statusCode} ${STATUS_TEXT[result.statusCode] || ''}</span><span class="hint">${formatMs(result.responseTimeMs)}</span>` : '<span class="status-badge status-err">Error</span>'}
                 ${tests.length ? `<span class="test-tag ${passed === tests.length ? 'pass' : 'fail'}">${passed}/${tests.length}</span>` : ''}
                 <button class="icon-btn" title="Open request" onclick="closeRunner();openRequest(${item.id})">${icon('chevron')}</button>
@@ -2572,15 +2576,21 @@ async function startRunner() {
         if (delay) await new Promise(r => setTimeout(r, delay));
     };
 
-    // Every request of every iteration (data row) goes through one queue: in order with Parallel = 1,
-    // otherwise up to `parallel` in flight at once, across iteration boundaries too
-    const queue = [];
-    for (let it = 1; it <= iterations; it++) selected.forEach(item => queue.push([item, it, data ? data.rows[it - 1] : null]));
-    const worker = async () => { while (queue.length && !runner.stop) await runOne(...queue.shift()); };
-    await Promise.all(Array.from({ length: Math.min(parallel, queue.length) }, worker));
-    // Parallel runs finish out of order; keep the report in run order
+    // Each user runs the selected requests in order, so requests that chain still work within a user
+    const runIteration = async (it, rowVars, user) => {
+        for (const item of selected) { if (runner.stop) return; await runOne(item, it, rowVars, user); }
+    };
+    if (data) {
+        const rows = data.rows.map((row, i) => [i + 1, row]);
+        const user = async u => { while (rows.length && !runner.stop) { const [it, row] = rows.shift(); await runIteration(it, row, u); } };
+        await Promise.all(Array.from({ length: Math.min(users, rows.length) }, (_, i) => user(i + 1)));
+    } else {
+        const user = async u => { for (let it = 1; it <= iterations && !runner.stop; it++) await runIteration(it, null, u); };
+        await Promise.all(Array.from({ length: users }, (_, i) => user(i + 1)));
+    }
+    // Users finish out of order; keep the report in run order
     const order = r => selected.findIndex(s => s.id === r.requestId);
-    runner.report.results.sort((a, b) => a.iteration - b.iteration || order(a) - order(b));
+    runner.report.results.sort((a, b) => a.iteration - b.iteration || (data ? 0 : a.user - b.user) || order(a) - order(b));
 
     runner.running = false;
     runner.report.finishedAt = new Date().toISOString();
@@ -2607,14 +2617,15 @@ function exportRunnerReport(format) {
     const base = `reqly-run-${(r.folder || 'collection').replace(/[^\w.-]+/g, '_')}-${stamp}`;
     if (format === 'json') return download(base + '.json', JSON.stringify(r, null, 2), 'application/json');
     const s = r.summary;
-    const rows = r.results.map(x => `<tr class="${x.error || x.tests.some(t => !t.passed) ? 'bad' : 'ok'}"><td>${x.iteration}</td><td><b>${esc(x.method)}</b> ${esc(x.request)}<div class="sub">${esc(x.path || '')}</div></td><td>${x.status ?? 'ERR'}</td><td>${x.timeMs ?? ''} ms</td><td>${x.error ? `<div class="f">${esc(x.error)}</div>` : ''}${x.tests.map(t => `<div class="${t.passed ? 'p' : 'f'}">${t.passed ? '✓' : '✗'} ${esc(t.name)}${t.passed ? '' : ` <span class="sub">${esc(t.message || '')}</span>`}</div>`).join('')}</td></tr>`).join('');
+    const perUser = r.parallel > 1 && !r.dataFile;
+    const rows = r.results.map(x => `<tr class="${x.error || x.tests.some(t => !t.passed) ? 'bad' : 'ok'}"><td>${x.iteration}${perUser ? `<div class="sub">user ${x.user}</div>` : ''}</td><td><b>${esc(x.method)}</b> ${esc(x.request)}<div class="sub">${esc(x.path || '')}</div></td><td>${x.status ?? 'ERR'}</td><td>${x.timeMs ?? ''} ms</td><td>${x.error ? `<div class="f">${esc(x.error)}</div>` : ''}${x.tests.map(t => `<div class="${t.passed ? 'p' : 'f'}">${t.passed ? '✓' : '✗'} ${esc(t.name)}${t.passed ? '' : ` <span class="sub">${esc(t.message || '')}</span>`}</div>`).join('')}</td></tr>`).join('');
     const html = `<!doctype html><html><head><meta charset="utf-8"><title>Reqly run · ${esc(r.folder || '')}</title><style>
         body{font:14px -apple-system,Segoe UI,sans-serif;margin:32px;color:#1e1e2e}h1{font-size:20px;margin:0 0 4px}.meta{color:#6c7086;margin-bottom:18px}
         .cards{display:flex;gap:12px;margin-bottom:20px}.card{border:1px solid #ddd;border-radius:8px;padding:10px 14px}.card b{display:block;font-size:20px}
         table{border-collapse:collapse;width:100%}th,td{text-align:left;padding:8px;border-bottom:1px solid #eee;vertical-align:top}th{font-size:12px;color:#6c7086}
         tr.bad td:first-child{box-shadow:inset 3px 0 #d20f39}tr.ok td:first-child{box-shadow:inset 3px 0 #40a02b}.p{color:#40a02b}.f{color:#d20f39}.sub{color:#8c8fa1;font-size:12px}
         </style></head><body><h1>${esc(r.folder || 'Collection run')}</h1>
-        <div class="meta">${new Date(r.startedAt).toLocaleString()} · environment: ${esc(r.environment || 'none')} · ${r.iterations} iteration(s)${r.dataFile ? ` · data: ${esc(r.dataFile)}` : ''}${r.parallel > 1 ? ` · ${r.parallel} in parallel` : ''}${s.stopped ? ' · <b>stopped early</b>' : ''}</div>
+        <div class="meta">${new Date(r.startedAt).toLocaleString()} · environment: ${esc(r.environment || 'none')} · ${r.iterations} iteration(s)${r.dataFile ? ` · data: ${esc(r.dataFile)}` : ''}${r.parallel > 1 ? ` · ${r.parallel} parallel users` : ''}${s.stopped ? ' · <b>stopped early</b>' : ''}</div>
         <div class="cards"><div class="card"><b>${s.done}</b>requests</div><div class="card"><b class="p">${s.passed}</b>tests passed</div><div class="card"><b class="f">${s.failed}</b>tests failed</div><div class="card"><b>${s.errors}</b>errors</div><div class="card"><b>${s.done ? Math.round(s.time / s.done) : 0} ms</b>average</div><div class="card"><b>${(s.durationMs / 1000).toFixed(1)} s</b>total</div></div>
         <table><thead><tr><th>#</th><th>Request</th><th>Status</th><th>Time</th><th>Tests</th></tr></thead><tbody>${rows}</tbody></table></body></html>`;
     download(base + '.html', html, 'text/html');
@@ -2806,6 +2817,7 @@ function initEvents() {
     $('runnerDataFile').addEventListener('change', e => { if (e.target.files[0]) loadRunnerData(e.target.files[0]); });
     $('runnerList').addEventListener('change', renderRunnerPlan);
     $('runnerIterations').addEventListener('input', renderRunnerPlan);
+    $('runnerParallel').addEventListener('change', renderRunnerPlan);
     $('runnerDataClear').addEventListener('click', clearRunnerData);
     $('runnerAll').addEventListener('change', e => { document.querySelectorAll('#runnerList [data-run]').forEach(cb => { cb.checked = e.target.checked; }); renderRunnerPlan(); });
 

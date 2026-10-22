@@ -3,6 +3,13 @@
 Every change to Reqly gets a new version (see `gradle.properties` and `./gradlew bumpVersion`).
 Patch versions are fixes and small changes, minor versions add features, major versions break compatibility.
 
+## [1.1.0] - 2026-10-23
+
+- Runner: Parallel now means parallel users
+- each user runs the selected requests in order for every iteration, so 2 iterations x 2 parallel sends 4 requests
+- with a data file the users share the rows so each row runs once
+- the plan before Run shows the total, result rows and the HTML report show which user ran each request
+
 ## [1.0.1] - 2026-10-23
 
 - Version is now set in one place (gradle.properties) and shown in the app's About box and sign-in page
