@@ -2990,6 +2990,7 @@ async function loadUser() {
     const b = $('accountBtn');
     b.removeAttribute('title');
     b.dataset.tip = `${state.user.name}\n${state.user.email}`;
+    b.setAttribute('aria-label', `Account menu for ${state.user.name}`);
 }
 
 function openAccountMenu(ev) {

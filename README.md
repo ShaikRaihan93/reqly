@@ -2,7 +2,16 @@
 
 A lightweight, self-hosted API testing tool built with Spring Boot. Think Postman, but running locally in your browser with zero cloud dependencies.
 
-## Quick Start
+## Install (macOS)
+
+Download `Reqly-1.0.0.dmg`, open it and drag **Reqly** into Applications. Reqly bundles its own Java runtime.
+Launching it starts Reqly in the background, opens it in your browser and adds a menu-bar icon
+(**Open Reqly**, **Show logs**, **Quit**). Launching it again while it runs just reopens the browser.
+
+The first time, create your account on the sign-in screen. Each account has its own workspace; the first
+account also takes over anything saved before accounts existed.
+
+## Run from source
 
 **Prerequisites:** Java 17+
 
@@ -10,7 +19,36 @@ A lightweight, self-hosted API testing tool built with Spring Boot. Think Postma
 ./gradlew bootRun
 ```
 
-Open **http://localhost:8899** — that's it. Data is stored locally in `~/reqly-data/` using an embedded H2 database.
+Open **http://localhost:8899**. UI files are served straight from `src/`, so frontend edits show up on reload.
+Data is stored in `~/reqly-data/` (embedded H2 database, encryption key, automatic backups, logs).
+
+### Build installers
+
+```bash
+./gradlew test            # 29 unit + integration tests
+./gradlew packageMacApp   # build/dist/Reqly.app
+./gradlew packageMac      # build/dist/Reqly-1.0.0.dmg
+./gradlew packageMac -PmacSignIdentity="Developer ID Application: Your Name (TEAMID)"   # signed
+```
+
+Unsigned builds show an "unidentified developer" warning on other Macs. To distribute, sign with an Apple
+Developer ID and notarise the DMG (`xcrun notarytool submit … --wait`, then `xcrun stapler staple`).
+
+## Security & privacy
+
+- The server listens on `127.0.0.1` only and rejects requests addressed to other host names (DNS rebinding)
+  and state-changing requests from other websites (Origin check). Security headers and a CSP are set.
+- Sign-in required: BCrypt-hashed passwords, hashed session tokens in an HttpOnly, SameSite=Strict cookie,
+  sign-in throttling. Forgot your password? Start Reqly with `--reqly.reset-password=you@example.com`
+  to get a temporary one printed to the console.
+- Environment variables, auth settings and headers are encrypted at rest (AES-256-GCM) with a key in
+  `~/reqly-data/reqly.key`. Credentials are masked in the server log.
+- Pre-request and post-response scripts run in a sandboxed frame without access to the app, cookies or API.
+- No telemetry, analytics or third-party requests; fonts are bundled.
+- The database is backed up to `~/reqly-data/backups` on every start (last 10), before any migration.
+
+See the in-app Privacy Policy (`/privacy`), Terms of Use (`/terms`) and open-source licenses (`/licenses`).
+The policy and terms are templates: fill in the bracketed parts and have them reviewed before selling.
 
 ## Features
 
@@ -96,7 +134,7 @@ Full HTTPS support. Turn on *Ignore SSL certificate errors* in a request's Setti
 |----------|-----------------------------------------|
 | Backend  | Spring Boot 3.2.5, Java 17             |
 | Frontend | Vanilla JS, HTML5, CSS (dark theme)     |
-| Database | H2 (default) or MariaDB                |
+| Database | H2 (default, Flyway migrations) or MariaDB |
 | HTTP     | Java HttpClient + Apache HttpClient 5   |
 | CSV      | OpenCSV 5.9                             |
 

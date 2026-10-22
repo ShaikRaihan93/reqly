@@ -77,3 +77,49 @@ tasks.named('bootRun') {
 	systemProperty 'spring.thymeleaf.prefix', "file:${projectDir}/src/main/resources/templates/"
 	systemProperty 'spring.thymeleaf.cache', 'false'
 }
+
+// ---------------------------------------------------------------------------
+// Desktop packaging (jpackage, bundles its own Java runtime)
+//   ./gradlew packageMacApp   -> build/dist/Reqly.app   (quick local test)
+//   ./gradlew packageMac      -> build/dist/Reqly-1.0.0.dmg
+// Signing/notarisation: pass -PmacSignIdentity="Developer ID Application: Name (TEAMID)"
+// ---------------------------------------------------------------------------
+def jpackageInput = layout.buildDirectory.dir('jpackage/input')
+def distDir = layout.buildDirectory.dir('dist')
+
+tasks.register('prepareJpackageInput', Sync) {
+	dependsOn 'bootJar'
+	from tasks.named('bootJar')
+	into jpackageInput
+}
+
+[packageMacApp: 'app-image', packageMac: 'dmg'].each { taskName, type ->
+	tasks.register(taskName, Exec) {
+		group = 'distribution'
+		description = "Builds the macOS ${type} with jpackage"
+		dependsOn 'prepareJpackageInput'
+		doFirst {
+			def dest = distDir.get().asFile
+			dest.mkdirs()
+			delete(new File(dest, 'Reqly.app'))
+			delete(fileTree(dest) { include '*.dmg' })
+		}
+		def cmd = ['jpackage', '--type', type,
+			'--name', 'Reqly',
+			'--app-version', project.version,
+			'--vendor', 'Reqly',
+			'--description', 'The API client that stays on your machine.',
+			'--copyright', '© [Company Name]',
+			'--input', jpackageInput.get().asFile.path,
+			'--main-jar', "reqly-${project.version}.jar".toString(),
+			'--icon', file('packaging/macos/Reqly.icns').path,
+			'--java-options', '-Dreqly.desktop=true',
+			'--java-options', '-Xmx768m',
+			'--mac-package-identifier', 'com.reqly.app',
+			'--mac-package-name', 'Reqly',
+			'--mac-app-category', 'developer-tools', // jpackage adds the public.app-category. prefix
+			'--dest', distDir.get().asFile.path]
+		if (project.hasProperty('macSignIdentity')) cmd += ['--mac-sign', '--mac-signing-key-user-name', project.property('macSignIdentity')]
+		commandLine cmd
+	}
+}
