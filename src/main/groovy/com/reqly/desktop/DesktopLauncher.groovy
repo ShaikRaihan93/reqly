@@ -13,6 +13,9 @@ import java.nio.file.Paths
 /**
  * Starts Reqly as a desktop app: one instance per machine, opens the default browser,
  * and adds a menu-bar / system-tray icon with "Open Reqly" and "Quit".
+ *
+ * With -Dreqly.native=true the macOS shell (packaging/macos/shell) owns the window, Dock icon and menus:
+ * the server then runs headless and stops when the shell process (-Dreqly.parentPid) goes away.
  */
 class DesktopLauncher {
 
@@ -20,18 +23,25 @@ class DesktopLauncher {
     static final String URL = "http://localhost:${PORT}/".toString()
 
     static void launch(String[] args) {
-        def dataDir = Paths.get(System.getProperty("user.home"), "reqly-data")
+        def dataDir = Paths.get(System.getProperty("reqly.data-dir") ?: Paths.get(System.getProperty("user.home"), "reqly-data").toString())
         Files.createDirectories(dataDir.resolve("logs"))
         System.setProperty("logging.file.name", dataDir.resolve("logs").resolve("reqly.log").toString())
-        System.setProperty("apple.awt.UIElement", "true") // no Dock icon or menu: the menu-bar icon is the UI
+        System.setProperty("apple.awt.UIElement", "true") // no Dock icon or menu: the menu-bar icon (or the shell) is the UI
+        boolean nativeShell = Boolean.getBoolean("reqly.native")
 
-        // Already running? Just bring it up in the browser.
-        if (reqlyAlreadyRunning()) {
+        // Already running? Just bring it up in the browser (the shell checks this itself before starting us).
+        if (!nativeShell && reqlyAlreadyRunning()) {
             openBrowser()
             return
         }
 
         def app = new SpringApplication(ReqlyApplication)
+        if (nativeShell) {
+            app.setHeadless(true)
+            app.addListeners({ e -> if (e instanceof ApplicationReadyEvent) exitWithParent(e.applicationContext) } as org.springframework.context.ApplicationListener)
+            app.run(args)
+            return
+        }
         app.setHeadless(false)
         // A Groovy closure listener receives every event, so filter for "ready"
         app.addListeners({ e -> if (e instanceof ApplicationReadyEvent) onReady(e.applicationContext) } as org.springframework.context.ApplicationListener)
@@ -41,6 +51,14 @@ class DesktopLauncher {
     private static void onReady(ConfigurableApplicationContext ctx) {
         installTray(ctx)
         openBrowser()
+    }
+
+    /** If the shell crashes or is force-quit it cannot stop us, so watch its process and shut down cleanly when it is gone. */
+    private static void exitWithParent(ConfigurableApplicationContext ctx) {
+        def pid = Long.getLong("reqly.parentPid")
+        def parent = pid ? ProcessHandle.of(pid).orElse(null) : null
+        if (!parent) return
+        parent.onExit().thenRun { System.exit(SpringApplication.exit(ctx)) }
     }
 
     private static boolean reqlyAlreadyRunning() {

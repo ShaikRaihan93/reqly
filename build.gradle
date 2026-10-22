@@ -82,10 +82,14 @@ tasks.named('bootRun') {
 // Desktop packaging (jpackage, bundles its own Java runtime)
 //   ./gradlew packageMacApp   -> build/dist/Reqly.app   (quick local test)
 //   ./gradlew packageMac      -> build/dist/Reqly-1.0.0.dmg
+// Reqly.app's executable is the native shell (packaging/macos/shell/main.swift): it starts the bundled
+// server and shows Reqly in its own window, so nothing opens in a browser.
 // Signing/notarisation: pass -PmacSignIdentity="Developer ID Application: Name (TEAMID)"
 // ---------------------------------------------------------------------------
 def jpackageInput = layout.buildDirectory.dir('jpackage/input')
 def distDir = layout.buildDirectory.dir('dist')
+def shellBinary = layout.buildDirectory.file('macshell/Reqly')
+def signIdentity = project.findProperty('macSignIdentity')
 
 tasks.register('prepareJpackageInput', Sync) {
 	dependsOn 'bootJar'
@@ -93,33 +97,73 @@ tasks.register('prepareJpackageInput', Sync) {
 	into jpackageInput
 }
 
-[packageMacApp: 'app-image', packageMac: 'dmg'].each { taskName, type ->
-	tasks.register(taskName, Exec) {
-		group = 'distribution'
-		description = "Builds the macOS ${type} with jpackage"
-		dependsOn 'prepareJpackageInput'
-		doFirst {
-			def dest = distDir.get().asFile
-			dest.mkdirs()
-			delete(new File(dest, 'Reqly.app'))
-			delete(fileTree(dest) { include '*.dmg' })
-		}
-		def cmd = ['jpackage', '--type', type,
-			'--name', 'Reqly',
-			'--app-version', project.version,
-			'--vendor', 'Reqly',
-			'--description', 'The API client that stays on your machine.',
-			'--copyright', '© [Company Name]',
-			'--input', jpackageInput.get().asFile.path,
-			'--main-jar', "reqly-${project.version}.jar".toString(),
-			'--icon', file('packaging/macos/Reqly.icns').path,
-			'--java-options', '-Dreqly.desktop=true',
-			'--java-options', '-Xmx768m',
-			'--mac-package-identifier', 'com.reqly.app',
-			'--mac-package-name', 'Reqly',
-			'--mac-app-category', 'developer-tools', // jpackage adds the public.app-category. prefix
-			'--dest', distDir.get().asFile.path]
-		if (project.hasProperty('macSignIdentity')) cmd += ['--mac-sign', '--mac-signing-key-user-name', project.property('macSignIdentity')]
-		commandLine cmd
+tasks.register('compileMacShell', Exec) {
+	group = 'distribution'
+	description = 'Compiles the native macOS window that hosts Reqly'
+	def source = file('packaging/macos/shell/main.swift')
+	inputs.file(source)
+	outputs.file(shellBinary)
+	def arch = System.getProperty('os.arch') == 'aarch64' ? 'arm64' : 'x86_64' // match the bundled Java runtime
+	doFirst { shellBinary.get().asFile.parentFile.mkdirs() }
+	commandLine 'xcrun', 'swiftc', '-O', '-target', "${arch}-apple-macos12".toString(),
+		'-o', shellBinary.get().asFile.path, source.path
+}
+
+tasks.register('packageMacApp', Exec) {
+	group = 'distribution'
+	description = 'Builds build/dist/Reqly.app (native window + bundled server)'
+	dependsOn 'prepareJpackageInput', 'compileMacShell'
+	def app = distDir.map { new File(it.asFile, 'Reqly.app') }
+	doFirst {
+		distDir.get().asFile.mkdirs()
+		delete(app.get())
 	}
+	def cmd = ['jpackage', '--type', 'app-image',
+		'--name', 'Reqly',
+		'--app-version', project.version,
+		'--vendor', 'Reqly',
+		'--description', 'The API client that stays on your machine.',
+		'--copyright', '© [Company Name]',
+		'--input', jpackageInput.get().asFile.path,
+		'--main-jar', "reqly-${project.version}.jar".toString(),
+		'--icon', file('packaging/macos/Reqly.icns').path,
+		'--java-options', '-Dreqly.desktop=true',
+		'--java-options', '-Xmx768m',
+		// jpackage's default also strips bin/java, which the shell needs to start the server
+		'--jlink-options', '--strip-debug --no-man-pages --no-header-files',
+		'--mac-package-identifier', 'com.reqly.app',
+		'--mac-package-name', 'Reqly',
+		'--mac-app-category', 'developer-tools', // jpackage adds the public.app-category. prefix
+		'--dest', distDir.get().asFile.path]
+	if (signIdentity) cmd += ['--mac-sign', '--mac-signing-key-user-name', signIdentity]
+	commandLine cmd
+	doLast {
+		def contents = new File(app.get(), 'Contents')
+		// Swap jpackage's launcher for the shell; the shell runs Contents/runtime's java on Contents/app's jar itself
+		def exe = new File(contents, 'MacOS/Reqly')
+		exe.bytes = shellBinary.get().asFile.bytes
+		exe.setExecutable(true, false)
+		def plist = new File(contents, 'Info.plist').path
+		providers.exec { commandLine '/usr/libexec/PlistBuddy', '-c', 'Add :NSAppTransportSecurity:NSAllowsLocalNetworking bool true', plist; ignoreExitValue = true }.result.get()
+		providers.exec { commandLine '/usr/libexec/PlistBuddy', '-c', 'Add :LSMinimumSystemVersion string 12.0', plist; ignoreExitValue = true }.result.get()
+		// Changing the executable invalidates the bundle signature: sign again (ad hoc unless an identity was given)
+		def sign = signIdentity
+			? ['codesign', '--force', '--timestamp', '--options', 'runtime', '--entitlements', file('packaging/macos/shell/Reqly.entitlements').path, '--sign', signIdentity, app.get().path]
+			: ['codesign', '--force', '--deep', '--sign', '-', app.get().path]
+		providers.exec { commandLine sign }.result.get()
+	}
+}
+
+tasks.register('packageMac', Exec) {
+	group = 'distribution'
+	description = 'Builds build/dist/Reqly-<version>.dmg from Reqly.app'
+	dependsOn 'packageMacApp'
+	doFirst { delete(fileTree(distDir) { include '*.dmg' }) }
+	def cmd = ['jpackage', '--type', 'dmg',
+		'--name', 'Reqly',
+		'--app-version', project.version,
+		'--app-image', distDir.get().file('Reqly.app').asFile.path,
+		'--dest', distDir.get().asFile.path]
+	if (signIdentity) cmd += ['--mac-sign', '--mac-signing-key-user-name', signIdentity]
+	commandLine cmd
 }

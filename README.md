@@ -1,12 +1,13 @@
 # Reqly
 
-A lightweight, self-hosted API testing tool built with Spring Boot. Think Postman, but running locally in your browser with zero cloud dependencies.
+A lightweight, self-hosted API testing tool built with Spring Boot. Think Postman, but running entirely on your machine with zero cloud dependencies.
 
 ## Install (macOS)
 
 Download `Reqly-1.0.0.dmg`, open it and drag **Reqly** into Applications. Reqly bundles its own Java runtime.
-Launching it starts Reqly in the background, opens it in your browser and adds a menu-bar icon
-(**Open Reqly**, **Show logs**, **Quit**). Launching it again while it runs just reopens the browser.
+Reqly opens in its own window with a Dock icon and the usual Mac menus, like Postman or Slack; no browser
+needed. It starts its local server itself and stops it when you quit (⌘Q). ⌘T / ⌘W open and close request
+tabs, ⌘+ / ⌘− zoom, and **Help → Show Logs** opens `~/reqly-data/logs`.
 
 The first time, create your account on the sign-in screen. Each account has its own workspace; the first
 account also takes over anything saved before accounts existed.
@@ -25,11 +26,15 @@ Data is stored in `~/reqly-data/` (embedded H2 database, encryption key, automat
 ### Build installers
 
 ```bash
-./gradlew test            # 34 unit + integration tests
+./gradlew test            # unit + integration tests
 ./gradlew packageMacApp   # build/dist/Reqly.app
 ./gradlew packageMac      # build/dist/Reqly-1.0.0.dmg
 ./gradlew packageMac -PmacSignIdentity="Developer ID Application: Your Name (TEAMID)"   # signed
 ```
+
+`Reqly.app` is a small native window (`packaging/macos/shell/main.swift`, WKWebView) around the bundled
+server. The build needs Xcode's command-line tools for `swiftc`, and it targets the CPU of the JDK running
+Gradle, so build with an Apple-silicon (aarch64) JDK to get a native arm64 app instead of one under Rosetta.
 
 Unsigned builds show an "unidentified developer" warning on other Macs. To distribute, sign with an Apple
 Developer ID and notarise the DMG (`xcrun notarytool submit … --wait`, then `xcrun stapler staple`).
