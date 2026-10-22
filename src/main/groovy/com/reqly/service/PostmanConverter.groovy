@@ -77,12 +77,14 @@ class PostmanConverter {
         def req = new ApiRequest(name: item.name ?: "Request", method: ReqlyService.normalizeMethod((r.method ?: "GET").toString()))
 
         // URL + query params
-        def params = [:], disabledParams = [:]
+        def params = [:], disabledParams = [:], paramRows = null
         if (r.url instanceof Map) {
             def raw = (r.url.raw ?: "").toString()
             if (r.url.query instanceof List && raw.contains("?")) raw = raw.substring(0, raw.indexOf("?"))
             req.url = raw
             (r.url.query ?: []).each { q -> if (q.key) (q.disabled ? disabledParams : params)[q.key] = q.value?.toString() ?: "" }
+            // rows keep order, repeated keys (?id=1&id=2) and disabled entries, which the maps above cannot
+            if (r.url.query instanceof List) paramRows = r.url.query.findAll { it.key }.collect { [key: it.key, value: it.value?.toString() ?: "", enabled: !it.disabled] }
         } else {
             req.url = (r.url ?: "").toString()
         }
@@ -102,11 +104,18 @@ class PostmanConverter {
                 if (langType && !headers.keySet().any { it.equalsIgnoreCase("Content-Type") }) headers["Content-Type"] = langType
                 break
             case "urlencoded":
-            case "formdata":
-                // form-data has no multipart support here; text fields are sent url-encoded
-                req.body = (body[body.mode] ?: []).findAll { !it.disabled && it.type != "file" }
+                req.body = (body.urlencoded ?: []).findAll { !it.disabled }
                         .collect { "${enc(it.key)}=${enc(it.value)}" }.join("&")
                 req.bodyType = "x-www-form-urlencoded"
+                break
+            case "formdata":
+                // Same row shape the form-data editor stores; files must be picked again, Postman only keeps their path
+                req.body = json((body.formdata ?: []).findAll { it.key }.collect { f ->
+                    f.type == "file"
+                            ? [key: f.key, type: "file", enabled: !f.disabled, fileName: f.src ? f.src.toString().tokenize("/\\\\").last() : null]
+                            : [key: f.key, value: f.value?.toString() ?: "", type: "text", enabled: !f.disabled]
+                })
+                req.bodyType = "form-data"
                 break
             default:
                 req.bodyType = "none"
@@ -142,7 +151,12 @@ class PostmanConverter {
         req.postResponseScript = scriptOf(item.event as List, "test")
         req.headers = json(headers)
         req.params = json(params)
-        req.disabledItems = json([headers: disabledHeaders, params: disabledParams])
+        req.disabledItems = json([headers: disabledHeaders, params: disabledParams, paramRows: paramRows])
+        def behavior = item.protocolProfileBehavior as Map
+        def settings = [:]
+        if (behavior?.followRedirects == false) settings.followRedirects = false
+        if (behavior?.strictSSL == false) settings.insecure = true
+        if (settings) req.settings = json(settings)
         req
     }
 
@@ -183,7 +197,9 @@ class PostmanConverter {
         Map<String, String> params = read(req.params)
         Map disabled = read(req.disabledItems)
 
-        def query = params.collect { k, v -> [key: k, value: v] } + (disabled.params ?: [:]).collect { k, v -> [key: k, value: v, disabled: true] }
+        def query = disabled.paramRows instanceof List
+                ? disabled.paramRows.findAll { it.key }.collect { it.enabled == false ? [key: it.key, value: it.value ?: "", disabled: true] : [key: it.key, value: it.value ?: ""] }
+                : params.collect { k, v -> [key: k, value: v] } + (disabled.params ?: [:]).collect { k, v -> [key: k, value: v, disabled: true] }
         def raw = req.url + (query.findAll { !it.disabled } ? (req.url.contains("?") ? "&" : "?") + query.findAll { !it.disabled }.collect { "${it.key}=${it.value}" }.join("&") : "")
         def request = [
             method: req.method,
@@ -191,7 +207,14 @@ class PostmanConverter {
             url   : query ? [raw: raw, query: query] : [raw: req.url]
         ]
 
-        if (req.body && req.bodyType != "none") {
+        if (req.body && req.bodyType == "form-data") {
+            def rows = []
+            try { rows = objectMapper.readValue(req.body, List) } catch (ignored) { }
+            request.body = [mode: "formdata", formdata: rows.findAll { it.key }.collect { f ->
+                def entry = f.type == "file" ? [key: f.key, type: "file", src: f.fileName ?: ""] : [key: f.key, value: f.value ?: "", type: "text"]
+                f.enabled == false ? entry + [disabled: true] : entry
+            }]
+        } else if (req.body && req.bodyType != "none") {
             request.body = req.bodyType == "x-www-form-urlencoded"
                     ? [mode: "urlencoded", urlencoded: req.body.split("&").findAll().collect { kv -> def p = kv.split("=", 2); [key: dec(p[0]), value: p.length > 1 ? dec(p[1]) : ""] }]
                     : [mode: "raw", raw: req.body, options: [raw: [language: req.bodyType == "text" ? "text" : "json"]]]
@@ -205,6 +228,11 @@ class PostmanConverter {
         }
 
         def item = [name: req.name, request: request]
+        Map settings = read(req.settings)
+        def behavior = [:]
+        if (settings.followRedirects == false) behavior.followRedirects = false
+        if (settings.insecure == true) behavior.strictSSL = false
+        if (behavior) item.protocolProfileBehavior = behavior
         def events = []
         if (req.preRequestScript?.trim()) {
             events << [listen: "prerequest", script: [type: "text/javascript", exec: req.preRequestScript.readLines()]]

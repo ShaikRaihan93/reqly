@@ -1,9 +1,11 @@
 package com.reqly.controller
 
+import com.reqly.security.CurrentUser
 import com.reqly.security.SecurityFilter
 import com.reqly.service.AuthService
 import jakarta.servlet.http.HttpServletRequest
 import org.springframework.stereotype.Controller
+import org.springframework.ui.Model
 import org.springframework.web.bind.annotation.GetMapping
 
 @Controller
@@ -15,8 +17,10 @@ class PageController {
         this.auth = auth
     }
 
+    /** The page carries the user's id so browser storage can be kept apart per account before any API call. */
     @GetMapping("/")
-    String index() {
+    String index(Model model) {
+        model.addAttribute("userId", CurrentUser.id())
         "index"
     }
 
@@ -26,7 +30,10 @@ class PageController {
     }
 
     @GetMapping("/admin")
-    String admin() { "admin" }
+    String admin(Model model) {
+        model.addAttribute("userId", CurrentUser.id())
+        "admin"
+    }
 
     @GetMapping("/privacy")
     String privacy() { "privacy" }

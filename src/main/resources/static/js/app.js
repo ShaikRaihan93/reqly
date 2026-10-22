@@ -14,10 +14,28 @@ function esc(s) {
 
 function icon(name, cls = '') { return `<svg class="i ${cls}"><use href="#i-${name}"/></svg>`; }
 
-function lsGet(key, fallback) {
-    try { const v = localStorage.getItem(key); return v == null ? fallback : JSON.parse(v); } catch (e) { return fallback; }
+// Keys holding an account's own work (open tabs, terminal history...) are stored per account, so the next
+// person signing in on this browser doesn't see them. UI preferences such as the theme stay per browser.
+const USER_KEYS = new Set(['reqly.tabs', 'reqly.env', 'reqly.expanded', 'reqly.termHistory', 'reqly.hud']);
+const USER_ID = document.querySelector('meta[name="reqly-user"]')?.content || '';
+
+function lsKey(key) {
+    if (!USER_KEYS.has(key) || !USER_ID) return key;
+    const scoped = `${key}.u${USER_ID}`;
+    try {
+        // One-time move of values saved before storage was per account
+        const legacy = localStorage.getItem(key);
+        if (legacy != null) {
+            if (localStorage.getItem(scoped) == null) localStorage.setItem(scoped, legacy);
+            localStorage.removeItem(key);
+        }
+    } catch (e) { /* storage unavailable */ }
+    return scoped;
 }
-function lsSet(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) { /* storage unavailable */ } }
+function lsGet(key, fallback) {
+    try { const v = localStorage.getItem(lsKey(key)); return v == null ? fallback : JSON.parse(v); } catch (e) { return fallback; }
+}
+function lsSet(key, value) { try { localStorage.setItem(lsKey(key), JSON.stringify(value)); } catch (e) { /* storage unavailable */ } }
 
 function debounce(fn, ms) {
     let t;

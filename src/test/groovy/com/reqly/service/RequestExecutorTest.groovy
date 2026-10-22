@@ -54,6 +54,22 @@ class RequestExecutorTest {
     }
 
     @Test
+    void encodesVariablesInsideUrlEncodedBodies() {
+        def e = echo(new RequestDto(method: "POST", url: "${base}/f".toString(), body: "name={{who}}&x=a%2Bb",
+                bodyType: "x-www-form-urlencoded"), [who: "ada & bob=1"])
+        assertEquals("name=ada+%26+bob%3D1&x=a%2Bb", e.body)
+    }
+
+    @Test
+    void encodesCharactersThatAreIllegalInUrls() {
+        def e = echo(new RequestDto(method: "GET", url: "{{base}}/users/{{name}}?q={{q}}&raw=a%20b"),
+                [base: base, name: "Ada L", q: 'say "hi", é'])
+        assertEquals("/users/Ada L", e.path) // the server decodes the path
+        assertEquals("q=say%20%22hi%22,%20%C3%A9&raw=a%20b", e.query)
+        assertEquals("100%25", RequestExecutor.encodeUnsafeChars("100%"))
+    }
+
+    @Test
     void sendsMultipartFormDataWithFiles() {
         def rows = '[{"key":"note","value":"hi","type":"text","enabled":true},{"key":"upload","type":"file","enabled":true}]'
         def e = echo(new RequestDto(method: "POST", url: "${base}/upload".toString(), body: rows, bodyType: "form-data"),

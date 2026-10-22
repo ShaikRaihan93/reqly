@@ -83,6 +83,10 @@ class TestRunner {
                 result.passed = false
                 result.message = "Unknown test assertion: ${line}"
             }
+            if (result.message == null) {
+                result.passed = false
+                result.message = "Unsupported comparison in: ${line}"
+            }
         } catch (Exception e) {
             result.passed = false
             result.message = "Error: ${e.message}"

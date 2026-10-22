@@ -40,7 +40,8 @@ class RequestExecutor {
 
         try {
             url = substituteVariables(buildUrl(request, variables), variables)
-            def builder = HttpRequest.newBuilder().uri(URI.create(url))
+            if (url =~ /\{\{[^}]+\}\}/) throw new IllegalArgumentException("unresolved variable")
+            def builder = HttpRequest.newBuilder().uri(URI.create(encodeUnsafeChars(url)))
 
             // Headers
             def headers = request.headers != null ? new HashMap<>(request.headers) : [:]
@@ -87,6 +88,11 @@ class RequestExecutor {
                 byte[] bytes = multipartBody(request.body, files ?: [:], variables, boundary)
                 body = "(multipart form-data, ${bytes.length} bytes)".toString()
                 bodyPublisher = HttpRequest.BodyPublishers.ofByteArray(bytes)
+            } else if (request.bodyType == "x-www-form-urlencoded" && variables) {
+                // The body arrives already form-encoded, so a variable's value must be encoded too or "&"/"=" in it splits fields
+                def encoded = variables.collectEntries { k, v -> [k, URLEncoder.encode(v ?: "", StandardCharsets.UTF_8)] } as Map<String, String>
+                body = request.body != null ? substituteVariables(request.body, encoded) : null
+                bodyPublisher = body != null ? HttpRequest.BodyPublishers.ofString(body) : HttpRequest.BodyPublishers.noBody()
             } else {
                 body = request.body != null ? substituteVariables(request.body, variables) : null
                 bodyPublisher = body != null ? HttpRequest.BodyPublishers.ofString(body) : HttpRequest.BodyPublishers.noBody()
@@ -187,6 +193,26 @@ class RequestExecutor {
             result.csvRow = i
             result
         }
+    }
+
+    private static final String URL_SAFE = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~:/?#[]@!\$&'()*+,;="
+
+    /**
+     * Percent-encodes characters that cannot appear in a URL (spaces, quotes, non-ASCII...), as browsers and Postman do,
+     * so a variable value like "Ada L" works. Valid URL syntax and existing %XX escapes are left alone.
+     */
+    static String encodeUnsafeChars(String url) {
+        def out = new StringBuilder()
+        for (int i = 0; i < url.length(); ) {
+            int cp = url.codePointAt(i)
+            int len = Character.charCount(cp)
+            def ch = url.substring(i, i + len)
+            boolean escape = ch == "%" && i + 3 <= url.length() && url.substring(i + 1, i + 3) ==~ /[0-9A-Fa-f]{2}/
+            if (escape || URL_SAFE.contains(ch)) out << ch
+            else ch.getBytes(StandardCharsets.UTF_8).each { b -> out << String.format("%%%02X", b & 0xff) }
+            i += len
+        }
+        out.toString()
     }
 
     // Variables are substituted before encoding; afterwards "{{x}}" would already be "%7B%7Bx%7D%7D"

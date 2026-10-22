@@ -258,8 +258,12 @@ const EXAMPLES = [
     'SHOW TABLES',
 ];
 
+// Per account, like the main app's storage: another admin on this browser shouldn't see these queries
+const SQL_HISTORY_KEY = 'reqly.adminSql.u' + (document.querySelector('meta[name="reqly-user"]')?.content || '');
+try { localStorage.removeItem('reqly.adminSql'); } catch (e) { /* storage unavailable */ }
+
 async function renderSql() {
-    const history = (() => { try { return JSON.parse(localStorage.getItem('reqly.adminSql') || '[]'); } catch (e) { return []; } })();
+    const history = (() => { try { return JSON.parse(localStorage.getItem(SQL_HISTORY_KEY) || '[]'); } catch (e) { return []; } })();
     $('adminMain').innerHTML = `
         <div class="view-head"><h1>SQL console <small>read-only</small></h1><button class="btn btn-primary" id="runSql" title="Run (⌘↵)">Run ⌘↵</button></div>
         <textarea class="code sql-editor" id="sqlInput" spellcheck="false" aria-label="SQL query" placeholder="SELECT * FROM api_requests LIMIT 50">${esc(history[0] || '')}</textarea>
@@ -279,8 +283,8 @@ async function runSql(sql) {
     try {
         const r = await api('POST', '/api/admin/query', { sql });
         try {
-            const h = JSON.parse(localStorage.getItem('reqly.adminSql') || '[]').filter(x => x !== sql);
-            localStorage.setItem('reqly.adminSql', JSON.stringify([sql, ...h].slice(0, 20)));
+            const h = JSON.parse(localStorage.getItem(SQL_HISTORY_KEY) || '[]').filter(x => x !== sql);
+            localStorage.setItem(SQL_HISTORY_KEY, JSON.stringify([sql, ...h].slice(0, 20)));
         } catch (e) { /* storage unavailable */ }
         const cols = r.columns.map(c => c.name);
         out.innerHTML = `<div class="sql-meta"><span>${r.rows.length} row${r.rows.length === 1 ? '' : 's'}${r.truncated ? ' (first 1,000 shown)' : ''}</span><span>${r.ms} ms</span><a href="#" id="sqlCsv">Export CSV</a></div>

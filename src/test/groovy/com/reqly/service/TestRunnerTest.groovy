@@ -29,6 +29,12 @@ class TestRunnerTest {
     }
 
     @Test
+    void explainsUnsupportedComparisons() {
+        def results = runner.runTests("status 201\nresponseTime == 120", result)
+        assertTrue(results.every { !it.passed && it.message.startsWith("Unsupported comparison") }, results*.message.join('\n'))
+    }
+
+    @Test
     void captureLinesAreNotTreatedAsAssertions() {
         def results = runner.runTests("status == 201\njson.token -> token", result)
         assertEquals(1, results.size())
