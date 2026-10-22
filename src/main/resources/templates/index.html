@@ -47,6 +47,11 @@
         <symbol id="i-chevron-up" viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></symbol>
         <symbol id="i-collapse" viewBox="0 0 24 24"><path d="m7 20 5-5 5 5M7 4l5 5 5-5"/></symbol>
         <symbol id="i-expand" viewBox="0 0 24 24"><path d="m7 15 5 5 5-5M7 9l5-5 5 5"/></symbol>
+        <symbol id="i-sidebar" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></symbol>
+        <symbol id="i-columns" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M12 4v16"/></symbol>
+        <symbol id="i-rows" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 12h18"/></symbol>
+        <symbol id="i-sound-on" viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></symbol>
+        <symbol id="i-sound-off" viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="m22 9-6 6M16 9l6 6"/></symbol>
         <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></symbol>
     </svg>
 
@@ -69,6 +74,7 @@
             </div>
             <button class="btn btn-ghost" onclick="openEnvModal()" title="Create and edit environments and their variables">Environments</button>
             <span class="header-sep"></span>
+            <button class="icon-btn scifi-only" id="soundBtn" onclick="toggleSound()" title="Sound effects"><svg class="i"><use href="#i-sound-off"/></svg></button>
             <button class="icon-btn" onclick="showShortcuts()" title="Keyboard shortcuts" data-tip-key="?"><svg class="i"><use href="#i-keyboard"/></svg></button>
             <button class="icon-btn" id="themeBtn" onclick="toggleTheme()" title="Switch theme"><svg class="i"><use href="#i-theme"/></svg></button>
         </div>
@@ -91,9 +97,11 @@
 
         <section class="content">
             <div class="req-tabs">
+                <button class="icon-btn sidebar-toggle" id="sidebarToggle" onclick="toggleSidebar()" title="Hide sidebar" data-tip-key="⌘B"><svg class="i"><use href="#i-sidebar"/></svg></button>
                 <div class="req-tabs-scroll" id="reqTabs"></div>
                 <div class="req-tabs-actions">
                     <button class="icon-btn" onclick="newTab()" title="New tab" data-tip-key="⌥T"><svg class="i"><use href="#i-plus"/></svg></button>
+                    <button class="icon-btn" id="layoutToggle" onclick="toggleLayout()" title="Response beside the request"><svg class="i"><use href="#i-columns"/></svg></button>
                     <button class="icon-btn" onclick="openTabListMenu(event)" title="All open tabs"><svg class="i"><use href="#i-chevron-down"/></svg></button>
                 </div>
             </div>
@@ -404,6 +412,7 @@
                     <div style="display:flex;gap:10px">
                         <div style="flex:1"><label class="field-label">Iterations</label><input type="number" class="input" id="runnerIterations" title="Run the selected requests this many times" value="1" min="1" max="1000"></div>
                         <div style="flex:1"><label class="field-label">Delay (ms)</label><input type="number" class="input" id="runnerDelay" title="Pause between requests, in milliseconds" value="0" min="0" max="60000"></div>
+                        <div style="flex:1"><label class="field-label">Parallel</label><select class="select" id="runnerParallel" title="How many requests of an iteration run at the same time.&#10;Keep 1 when requests depend on each other (e.g. captured variables)."><option value="1">1</option><option value="2">2</option><option value="4">4</option><option value="8">8</option></select></div>
                     </div>
                     <div>
                         <label class="field-label">Data file <span class="muted">· optional</span></label>
@@ -418,6 +427,11 @@
                         <div class="runner-list" id="runnerList"></div>
                     </div>
                     <label class="hint" style="display:flex;gap:6px;align-items:center;cursor:pointer" title="Stop when a request errors or any test fails"><input type="checkbox" id="runnerStopOnFail"> Stop on first failure</label>
+                    <div class="runner-report" id="runnerReportBtns" style="display:none">
+                        <span class="hint">Export report</span>
+                        <button class="btn btn-sm" onclick="exportRunnerReport('html')" title="Shareable HTML report"><svg class="i"><use href="#i-download"/></svg>HTML</button>
+                        <button class="btn btn-sm" onclick="exportRunnerReport('json')" title="Raw results as JSON"><svg class="i"><use href="#i-download"/></svg>JSON</button>
+                    </div>
                     <button class="btn btn-primary runner-start" id="runnerStartBtn" onclick="startRunner()"><svg class="i"><use href="#i-play"/></svg>Run</button>
                 </div>
                 <div class="runner-results">

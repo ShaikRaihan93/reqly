@@ -113,6 +113,18 @@ class ApiController {
         service.getRequestDto(service.updateRequest(id, body).id)
     }
 
+    @PostMapping("/requests/reorder")
+    ResponseEntity<Void> reorderRequests(@RequestBody List<Long> ids) {
+        service.reorderRequests(ids)
+        ResponseEntity.ok().build()
+    }
+
+    @PostMapping("/collections/reorder")
+    ResponseEntity<Void> reorderCollections(@RequestBody List<Long> ids) {
+        service.reorderCollections(ids)
+        ResponseEntity.ok().build()
+    }
+
     @PostMapping("/requests/{id}/duplicate")
     RequestDto duplicateRequest(@PathVariable Long id) {
         service.getRequestDto(service.duplicateRequest(id).id)

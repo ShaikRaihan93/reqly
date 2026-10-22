@@ -120,7 +120,7 @@ class ReqlyService {
             if (dto.headers != null) req.headers = objectMapper.writeValueAsString(dto.headers)
             if (dto.params != null) req.params = objectMapper.writeValueAsString(dto.params)
             if (dto.authConfig != null) req.authConfig = objectMapper.writeValueAsString(dto.authConfig)
-            req.disabledItems = objectMapper.writeValueAsString([headers: dto.disabledHeaders ?: [:], params: dto.disabledParams ?: [:]])
+            req.disabledItems = objectMapper.writeValueAsString([headers: dto.disabledHeaders ?: [:], params: dto.disabledParams ?: [:], paramRows: dto.paramRows])
             req.settings = dto.settings ? objectMapper.writeValueAsString(dto.settings) : null
         } catch (ignored) {}
 
@@ -166,6 +166,21 @@ class ReqlyService {
                     : null
         }
         requestRepo.save(req)
+    }
+
+    /** Sets the order of requests inside a folder (or the unsorted list when collectionId is null). */
+    @Transactional
+    void reorderRequests(List<Long> ids) {
+        ids.eachWithIndex { Long id, int i ->
+            requestRepo.findById(id).ifPresent { it.sortOrder = i; requestRepo.save(it) }
+        }
+    }
+
+    @Transactional
+    void reorderCollections(List<Long> ids) {
+        ids.eachWithIndex { Long id, int i ->
+            collectionRepo.findById(id).ifPresent { it.sortOrder = i; collectionRepo.save(it) }
+        }
     }
 
     @Transactional
@@ -293,7 +308,10 @@ class ReqlyService {
     private void saveHistory(RequestDto dto, ExecutionResult result) {
         try {
             // Keep the query in the stored URL so reopening a history entry restores its params
-            def query = dto.params?.collect { k, v -> v ? "${k}=${v}" : k }?.join("&")
+            def pairs = dto.paramRows != null
+                    ? dto.paramRows.findAll { it.enabled != false && it.key }.collect { [it.key, it.value] }
+                    : dto.params?.collect { k, v -> [k, v] }
+            def query = pairs?.collect { kv -> kv[1] ? "${kv[0]}=${kv[1]}" : kv[0] }?.join("&")
             def history = new RequestHistory(
                 method: dto.method,
                 url: query ? dto.url + (dto.url.contains("?") ? "&" : "?") + query : dto.url,
@@ -334,9 +352,10 @@ class ReqlyService {
             if (req.authConfig) dto.authConfig = objectMapper.readValue(req.authConfig, new TypeReference<Map<String, String>>() {})
             if (req.settings) dto.settings = objectMapper.readValue(req.settings, new TypeReference<Map<String, Object>>() {})
             if (req.disabledItems) {
-                def disabled = objectMapper.readValue(req.disabledItems, new TypeReference<Map<String, Map<String, String>>>() {})
-                dto.disabledHeaders = disabled.headers
-                dto.disabledParams = disabled.params
+                def disabled = objectMapper.readValue(req.disabledItems, new TypeReference<Map<String, Object>>() {})
+                dto.disabledHeaders = disabled.headers as Map<String, String>
+                dto.disabledParams = disabled.params as Map<String, String>
+                dto.paramRows = disabled.paramRows as List<Map<String, Object>>
             }
         } catch (ignored) {}
         dto

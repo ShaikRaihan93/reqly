@@ -309,6 +309,8 @@ function onKvChange(id) {
     updateIndicators();
 }
 
+/** Enabled query rows in order (repeated keys allowed), from paramRows or the older params map. */
+const queryRows = dto => dto.paramRows ? dto.paramRows.filter(r => r.enabled !== false) : mapToRows(dto.params, true);
 const rowsToMap = (rows, enabled) => Object.fromEntries(rows.filter(r => r.key && (r.enabled !== false) === enabled).map(r => [r.key, r.value]));
 const mapToRows = (map, enabled) => Object.entries(map || {}).map(([key, value]) => ({ key, value: value ?? '', enabled }));
 
@@ -407,6 +409,7 @@ function buildRequestDto() {
         url: splitUrl($('urlInput').value.trim()).base,
         params: rowsToMap(params, true),
         disabledParams: rowsToMap(params, false),
+        paramRows: params.filter(r => r.key || r.value).map(({ key, value, enabled }) => ({ key, value, enabled: enabled !== false })),
         headers: rowsToMap(headers, true),
         disabledHeaders: rowsToMap(headers, false),
         body: bodyType === 'x-www-form-urlencoded' ? (encodeForm(getKv('formEditor')) || null)
@@ -448,7 +451,9 @@ function loadRequestToUI(dto) {
     sel.value = method;
     colorMethodSelect();
     const { base, query } = splitUrl(dto.url || '');
-    const paramRows = [...parseQuery(query), ...mapToRows(dto.params, true), ...mapToRows(dto.disabledParams, false)];
+    const paramRows = [...parseQuery(query), ...(dto.paramRows
+        ? dto.paramRows.map(r => ({ key: r.key, value: r.value ?? '', enabled: r.enabled !== false }))
+        : [...mapToRows(dto.params, true), ...mapToRows(dto.disabledParams, false)])];
     setKv('paramsEditor', paramRows, true);
     $('urlInput').value = composeUrl(base, paramRows);
     renderUrlMirror();
@@ -824,6 +829,7 @@ async function sendRequest() {
     const ctrl = new AbortController();
     tab.inFlight = ctrl;
     fx($('sendBtn'), 'fx-launch');
+    playSound('send');
     setSending(true);
     showResponseLoading();
     try {
@@ -832,11 +838,12 @@ async function sendRequest() {
         const ok = result.success && result.statusCode < 400;
         recordTelemetry(ok);
         if (tab.id === state.activeTabId) {
+            playSound(ok ? 'ok' : 'err');
             fx(document.querySelector('.response-panel'), ok ? 'fx-ok' : 'fx-err');
             if (!ok) fx(document.querySelector('.content'), 'fx-shake');
             const tests = result.testResults || [];
             if (isScifi() && tests.length && tests.every(t => t.passed)) {
-                setTimeout(() => toast(`✦ Achievement · All ${tests.length} test${tests.length > 1 ? 's' : ''} passed  +${tests.length * 10} XP`, false, 'achievement'), 450);
+                setTimeout(() => { toast(`✦ Achievement · All ${tests.length} test${tests.length > 1 ? 's' : ''} passed  +${tests.length * 10} XP`, false, 'achievement'); playSound('achieve'); }, 450);
             }
         }
         if (result.captureEnvironment) {
@@ -1431,7 +1438,7 @@ function substituteVars(s, vars) {
 function buildCurl(rawDto, vars = {}) {
     const dto = prepareForSend(rawDto);
     const sub = s => substituteVars(s, vars);
-    const url = composeUrl(dto.url || '', mapToRows(dto.params, true));
+    const url = composeUrl(dto.url || '', queryRows(dto));
     const parts = [`curl --location --request ${dto.method || 'GET'} ${shellQuote(sub(url))}`];
     const headers = { ...(dto.headers || {}) };
     if (headers._insecure === 'true') parts.push('--insecure');
@@ -1457,7 +1464,7 @@ function buildCurl(rawDto, vars = {}) {
 function wireRequest(rawDto, vars) {
     const dto = prepareForSend(rawDto);
     const sub = v => substituteVars(v, vars);
-    const url = sub(composeUrl(dto.url || '', mapToRows(dto.params, true)));
+    const url = sub(composeUrl(dto.url || '', queryRows(dto)));
     const headers = {};
     Object.entries(dto.headers || {}).forEach(([k, v]) => { if (k !== '_insecure') headers[sub(k)] = sub(v); });
     const auth = dto.authConfig || {};
@@ -1956,28 +1963,53 @@ function initTreeDnd() {
         e.dataTransfer.effectAllowed = 'move';
         e.dataTransfer.setData('text/plain', row.dataset.type + ':' + row.dataset.id);
     });
-    const target = e => e.target.closest('.tree-row[data-type=folder], [data-drop-root]');
+    const target = e => {
+        const t = e.target.closest('.tree-row[data-type=folder], .tree-row[data-type=request], [data-drop-root]');
+        // only requests can be dropped between requests
+        if (t?.dataset.type === 'request' && dragItem?.type !== 'request') return null;
+        if (t?.dataset.type === 'request' && +t.dataset.id === dragItem?.id) return null;
+        return t;
+    };
+    const clearMarks = () => list.querySelectorAll('.drop-target, .drop-before').forEach(el => el.classList.remove('drop-target', 'drop-before'));
     list.addEventListener('dragover', e => {
         const t = target(e);
         if (!dragItem || !t) return;
         if (t.dataset.type === 'folder' && dragItem.type === 'folder' && descendantFolderIds(findFolder(dragItem.id)).includes(+t.dataset.id)) return;
         e.preventDefault();
-        list.querySelectorAll('.drop-target').forEach(el => el.classList.remove('drop-target'));
-        t.classList.add('drop-target');
+        clearMarks();
+        t.classList.add(t.dataset.type === 'request' ? 'drop-before' : 'drop-target');
     });
-    list.addEventListener('dragleave', e => { const t = target(e); if (t && !t.contains(e.relatedTarget)) t.classList.remove('drop-target'); });
+    list.addEventListener('dragleave', e => { const t = target(e); if (t && !t.contains(e.relatedTarget)) t.classList.remove('drop-target', 'drop-before'); });
     list.addEventListener('drop', async e => {
         const t = target(e);
-        list.querySelectorAll('.drop-target').forEach(el => el.classList.remove('drop-target'));
+        clearMarks();
         if (!dragItem || !t) return;
         e.preventDefault();
+        if (t.dataset.type === 'request') {
+            const item = dragItem; dragItem = null;
+            try { await placeRequestBefore(item.id, +t.dataset.id); } catch (err) { toast('Move failed: ' + err.message, true); }
+            return;
+        }
         const dest = t.dataset.type === 'folder' ? +t.dataset.id : null;
         const item = dragItem; dragItem = null;
         const currentParent = item.type === 'folder' ? findFolder(item.id).parentId ?? null : findRequestParent(item.id);
         if (dest === currentParent || (item.type === 'folder' && dest === item.id)) return;
         try { await moveItem(item.type, item.id, dest); } catch (err) { toast('Move failed: ' + err.message, true); }
     });
-    list.addEventListener('dragend', () => { dragItem = null; list.querySelectorAll('.drop-target').forEach(el => el.classList.remove('drop-target')); });
+    list.addEventListener('dragend', () => { dragItem = null; clearMarks(); });
+}
+
+/** Moves a request next to another one (into its folder if needed) and saves the new order. */
+async function placeRequestBefore(id, beforeId) {
+    const dest = findRequestParent(beforeId);
+    if (findRequestParent(id) !== dest) {
+        await api('PATCH', `/api/requests/${id}`, { collectionId: dest });
+        state.tabs.filter(t => t.requestId === id).forEach(t => { t.collectionId = dest; });
+    }
+    const siblings = (dest != null ? findFolder(dest).requests : state.tree.requests).map(r => r.id).filter(x => x !== id);
+    siblings.splice(siblings.indexOf(beforeId), 0, id);
+    await api('POST', '/api/requests/reorder', siblings);
+    await loadTree();
 }
 
 // ============================================================
@@ -2354,7 +2386,7 @@ function applyDataVars(dto, vars) {
     if (!vars || !Object.keys(vars).length) return dto;
     const sub = s => substituteVars(s, vars);
     const subMap = m => m ? Object.fromEntries(Object.entries(m).map(([k, v]) => [sub(k), sub(v)])) : m;
-    return { ...dto, url: sub(dto.url), params: subMap(dto.params), headers: subMap(dto.headers), body: sub(dto.body), authConfig: subMap(dto.authConfig), testScript: sub(dto.testScript) };
+    return { ...dto, url: sub(dto.url), params: subMap(dto.params), paramRows: dto.paramRows?.map(r => ({ ...r, key: sub(r.key), value: sub(r.value) })), headers: subMap(dto.headers), body: sub(dto.body), authConfig: subMap(dto.authConfig), testScript: sub(dto.testScript) };
 }
 
 function openRunner(folderId) {
@@ -2398,10 +2430,13 @@ async function startRunner() {
     const data = runner.data;
     const iterations = data ? data.rows.length : Math.max(1, +$('runnerIterations').value || 1);
     const delay = Math.max(0, +$('runnerDelay').value || 0);
+    const parallel = Math.max(1, +$('runnerParallel').value || 1);
     const envId = $('runnerEnv').value;
     const stopOnFail = $('runnerStopOnFail').checked;
     runner.running = true; runner.stop = false;
+    runner.report = { folder: findFolder(runner.folderId)?.name, environment: $('runnerEnv').selectedOptions[0]?.textContent, startedAt: new Date().toISOString(), iterations, parallel, dataFile: data?.name || null, results: [] };
     setRunnerButton(true);
+    $('runnerReportBtns').style.display = 'none';
     $('runnerRows').innerHTML = '';
     const total = selected.length * iterations;
     const stats = { done: 0, passed: 0, failed: 0, errors: 0, time: 0 };
@@ -2411,50 +2446,60 @@ async function startRunner() {
         $('runnerProgress').style.width = (stats.done * 100 / total) + '%';
     };
     updateSummary();
-    outer:
-    for (let it = 1; it <= iterations; it++) {
-        const rowVars = data ? data.rows[it - 1] : null;
-        for (const item of selected) {
-            if (runner.stop) break outer;
-            let result, failed = false;
-            try {
-                const dto = applyDataVars(await api('GET', `/api/requests/${item.id}`), rowVars);
-                result = await api('POST', '/api/execute' + (envId ? `?environmentId=${envId}` : ''), prepareForSend(dto));
-            } catch (e) {
-                result = { success: false, error: e.message, testResults: [] };
-            }
-            const tests = result.testResults || [];
-            const passed = tests.filter(t => t.passed).length;
-            stats.done++;
-            stats.passed += passed;
-            stats.failed += tests.length - passed;
-            stats.time += result.responseTimeMs || 0;
-            if (!result.success) { stats.errors++; failed = true; }
-            if (passed < tests.length) failed = true;
-            const row = document.createElement('div');
-            row.className = 'run-row';
-            row.innerHTML = `<div class="run-row-head">
-                    <span class="method-badge method-${methodClass(item.method)}">${shortMethod(item.method)}</span>
-                    <span class="tree-name">${esc(item.name)}${iterations > 1 ? ` <span class="hint">#${it}</span>` : ''}${item.path ? ` <span class="hint">${esc(item.path)}</span>` : ''}</span>
-                    ${result.success ? `<span class="status-badge ${statusClass(result.statusCode)}">${result.statusCode} ${STATUS_TEXT[result.statusCode] || ''}</span><span class="hint">${formatMs(result.responseTimeMs)}</span>` : '<span class="status-badge status-err">Error</span>'}
-                    ${tests.length ? `<span class="test-tag ${passed === tests.length ? 'pass' : 'fail'}">${passed}/${tests.length}</span>` : ''}
-                    <button class="icon-btn" title="Open request" onclick="closeRunner();openRequest(${item.id})">${icon('chevron')}</button>
-                </div>
-                ${rowVars ? `<div class="run-iter" title="${esc(Object.entries(rowVars).map(([k, v]) => `${k} = ${v}`).join('\n'))}">row ${it}: ${esc(Object.entries(rowVars).map(([k, v]) => `${k}=${v}`).join(', '))}</div>` : ''}
-                ${!result.success ? `<div class="tests"><div style="color:var(--red)">${esc(result.error || 'Request failed')}</div></div>` : ''}
-                ${(result.captures || []).length ? `<div class="tests">${result.captures.map(c => `<div style="color:${c.ok ? 'var(--accent)' : 'var(--yellow)'}">${c.ok ? '↧' : '!'} {{${esc(c.name)}}} ${c.ok ? '= ' + esc(displayValue(c.name, c.value)) : esc(c.message || '')}</div>`).join('')}</div>` : ''}
-                ${tests.length ? `<div class="tests">${tests.map(t => `<div style="color:${t.passed ? 'var(--green)' : 'var(--red)'}">${t.passed ? '✓' : '✗'} ${esc(t.testName)}${t.passed ? '' : ` <span class="muted">${esc(t.message || '')}</span>`}</div>`).join('')}</div>` : ''}`;
-            $('runnerRows').appendChild(row);
-            row.scrollIntoView({ block: 'nearest' });
-            updateSummary();
-            if (failed && stopOnFail) break outer;
-            if (delay) await new Promise(r => setTimeout(r, delay));
+
+    const runOne = async (item, it, rowVars) => {
+        let result, failed = false;
+        try {
+            const dto = applyDataVars(await api('GET', `/api/requests/${item.id}`), rowVars);
+            result = await api('POST', '/api/execute' + (envId ? `?environmentId=${envId}` : ''), prepareForSend(dto));
+        } catch (e) {
+            result = { success: false, error: e.message, testResults: [] };
         }
+        const tests = result.testResults || [];
+        const passed = tests.filter(t => t.passed).length;
+        stats.done++;
+        stats.passed += passed;
+        stats.failed += tests.length - passed;
+        stats.time += result.responseTimeMs || 0;
+        if (!result.success) { stats.errors++; failed = true; }
+        if (passed < tests.length) failed = true;
+        runner.report.results.push({ iteration: it, request: item.name, path: item.path, method: item.method, url: item.url, data: rowVars, status: result.statusCode || null, timeMs: result.responseTimeMs ?? null, error: result.success ? null : result.error, tests: tests.map(t => ({ name: t.testName, passed: t.passed, message: t.message })), captures: (result.captures || []).map(c => ({ name: c.name, ok: c.ok })) });
+        const row = document.createElement('div');
+        row.className = 'run-row';
+        row.innerHTML = `<div class="run-row-head">
+                <span class="method-badge method-${methodClass(item.method)}">${shortMethod(item.method)}</span>
+                <span class="tree-name">${esc(item.name)}${iterations > 1 ? ` <span class="hint">#${it}</span>` : ''}${item.path ? ` <span class="hint">${esc(item.path)}</span>` : ''}</span>
+                ${result.success ? `<span class="status-badge ${statusClass(result.statusCode)}">${result.statusCode} ${STATUS_TEXT[result.statusCode] || ''}</span><span class="hint">${formatMs(result.responseTimeMs)}</span>` : '<span class="status-badge status-err">Error</span>'}
+                ${tests.length ? `<span class="test-tag ${passed === tests.length ? 'pass' : 'fail'}">${passed}/${tests.length}</span>` : ''}
+                <button class="icon-btn" title="Open request" onclick="closeRunner();openRequest(${item.id})">${icon('chevron')}</button>
+            </div>
+            ${rowVars ? `<div class="run-iter" title="${esc(Object.entries(rowVars).map(([k, v]) => `${k} = ${v}`).join('\n'))}">row ${it}: ${esc(Object.entries(rowVars).map(([k, v]) => `${k}=${v}`).join(', '))}</div>` : ''}
+            ${!result.success ? `<div class="tests"><div style="color:var(--red)">${esc(result.error || 'Request failed')}</div></div>` : ''}
+            ${(result.captures || []).length ? `<div class="tests">${result.captures.map(c => `<div style="color:${c.ok ? 'var(--accent)' : 'var(--yellow)'}">${c.ok ? '↧' : '!'} {{${esc(c.name)}}} ${c.ok ? '= ' + esc(displayValue(c.name, c.value)) : esc(c.message || '')}</div>`).join('')}</div>` : ''}
+            ${tests.length ? `<div class="tests">${tests.map(t => `<div style="color:${t.passed ? 'var(--green)' : 'var(--red)'}">${t.passed ? '✓' : '✗'} ${esc(t.testName)}${t.passed ? '' : ` <span class="muted">${esc(t.message || '')}</span>`}</div>`).join('')}</div>` : ''}`;
+        $('runnerRows').appendChild(row);
+        row.scrollIntoView({ block: 'nearest' });
+        updateSummary();
+        if (failed && stopOnFail) runner.stop = true;
+        if (delay) await new Promise(r => setTimeout(r, delay));
+    };
+
+    // Each iteration runs its requests in order, or with up to `parallel` in flight at once
+    for (let it = 1; it <= iterations && !runner.stop; it++) {
+        const rowVars = data ? data.rows[it - 1] : null;
+        const queue = [...selected];
+        const worker = async () => { while (queue.length && !runner.stop) await runOne(queue.shift(), it, rowVars); };
+        await Promise.all(Array.from({ length: Math.min(parallel, queue.length) }, worker));
     }
+
     runner.running = false;
+    runner.report.finishedAt = new Date().toISOString();
+    runner.report.summary = { ...stats, durationMs: Date.now() - started, stopped: runner.stop };
     setRunnerButton(false);
+    $('runnerReportBtns').style.display = '';
     updateSummary();
-    if (runner.stop) toast('Run stopped');
+    if (runner.stop) toast(stopOnFail && stats.done < total ? 'Stopped at the first failure' : 'Run stopped');
+    playSound(!stats.failed && !stats.errors ? 'win' : 'fail');
     if (isScifi()) {
         const win = !runner.stop && !stats.failed && !stats.errors;
         const banner = document.createElement('div');
@@ -2465,6 +2510,26 @@ async function startRunner() {
     }
 }
 
+function exportRunnerReport(format) {
+    const r = runner.report;
+    if (!r) return;
+    const stamp = r.startedAt.slice(0, 19).replace(/[T:]/g, '-');
+    const base = `reqly-run-${(r.folder || 'collection').replace(/[^\w.-]+/g, '_')}-${stamp}`;
+    if (format === 'json') return download(base + '.json', JSON.stringify(r, null, 2), 'application/json');
+    const s = r.summary;
+    const rows = r.results.map(x => `<tr class="${x.error || x.tests.some(t => !t.passed) ? 'bad' : 'ok'}"><td>${x.iteration}</td><td><b>${esc(x.method)}</b> ${esc(x.request)}<div class="sub">${esc(x.path || '')}</div></td><td>${x.status ?? 'ERR'}</td><td>${x.timeMs ?? ''} ms</td><td>${x.error ? `<div class="f">${esc(x.error)}</div>` : ''}${x.tests.map(t => `<div class="${t.passed ? 'p' : 'f'}">${t.passed ? '✓' : '✗'} ${esc(t.name)}${t.passed ? '' : ` <span class="sub">${esc(t.message || '')}</span>`}</div>`).join('')}</td></tr>`).join('');
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Reqly run · ${esc(r.folder || '')}</title><style>
+        body{font:14px -apple-system,Segoe UI,sans-serif;margin:32px;color:#1e1e2e}h1{font-size:20px;margin:0 0 4px}.meta{color:#6c7086;margin-bottom:18px}
+        .cards{display:flex;gap:12px;margin-bottom:20px}.card{border:1px solid #ddd;border-radius:8px;padding:10px 14px}.card b{display:block;font-size:20px}
+        table{border-collapse:collapse;width:100%}th,td{text-align:left;padding:8px;border-bottom:1px solid #eee;vertical-align:top}th{font-size:12px;color:#6c7086}
+        tr.bad td:first-child{box-shadow:inset 3px 0 #d20f39}tr.ok td:first-child{box-shadow:inset 3px 0 #40a02b}.p{color:#40a02b}.f{color:#d20f39}.sub{color:#8c8fa1;font-size:12px}
+        </style></head><body><h1>${esc(r.folder || 'Collection run')}</h1>
+        <div class="meta">${new Date(r.startedAt).toLocaleString()} · environment: ${esc(r.environment || 'none')} · ${r.iterations} iteration(s)${r.dataFile ? ` · data: ${esc(r.dataFile)}` : ''}${r.parallel > 1 ? ` · ${r.parallel} in parallel` : ''}${s.stopped ? ' · <b>stopped early</b>' : ''}</div>
+        <div class="cards"><div class="card"><b>${s.done}</b>requests</div><div class="card"><b class="p">${s.passed}</b>tests passed</div><div class="card"><b class="f">${s.failed}</b>tests failed</div><div class="card"><b>${s.errors}</b>errors</div><div class="card"><b>${s.done ? Math.round(s.time / s.done) : 0} ms</b>average</div><div class="card"><b>${(s.durationMs / 1000).toFixed(1)} s</b>total</div></div>
+        <table><thead><tr><th>#</th><th>Request</th><th>Status</th><th>Time</th><th>Tests</th></tr></thead><tbody>${rows}</tbody></table></body></html>`;
+    download(base + '.html', html, 'text/html');
+}
+
 // ============================================================
 // Layout: resizable sidebar and request/response split
 // ============================================================
@@ -2472,6 +2537,10 @@ function initResizers() {
     const layout = lsGet('reqly.layout', {});
     if (layout.sidebar) $('sidebar').style.width = layout.sidebar + 'px';
     if (layout.split) $('requestPanel').style.height = layout.split + '%';
+    if (layout.splitX) $('requestPanel').style.width = layout.splitX + '%';
+    if (layout.side) $('panels').classList.add('side');
+    if (layout.sidebarHidden) document.body.classList.add('sidebar-hidden');
+    updateLayoutButtons();
 
     const drag = (handle, onMove) => handle.addEventListener('mousedown', e => {
         e.preventDefault();
@@ -2481,7 +2550,7 @@ function initResizers() {
             document.body.classList.remove('resizing');
             window.removeEventListener('mousemove', move);
             window.removeEventListener('mouseup', up);
-            lsSet('reqly.layout', { sidebar: $('sidebar').offsetWidth, split: parseFloat($('requestPanel').style.height) || 50 });
+            saveLayout();
         };
         window.addEventListener('mousemove', move);
         window.addEventListener('mouseup', up);
@@ -2489,9 +2558,44 @@ function initResizers() {
     drag($('sidebarResizer'), ev => { $('sidebar').style.width = Math.min(520, Math.max(200, ev.clientX)) + 'px'; });
     drag($('panelResizer'), ev => {
         const r = $('panels').getBoundingClientRect();
-        $('requestPanel').style.height = Math.min(85, Math.max(15, (ev.clientY - r.top) * 100 / r.height)) + '%';
+        if ($('panels').classList.contains('side')) $('requestPanel').style.width = Math.min(80, Math.max(20, (ev.clientX - r.left) * 100 / r.width)) + '%';
+        else $('requestPanel').style.height = Math.min(85, Math.max(15, (ev.clientY - r.top) * 100 / r.height)) + '%';
     });
-    $('panelResizer').addEventListener('dblclick', () => { $('requestPanel').style.height = '50%'; });
+    $('panelResizer').addEventListener('dblclick', () => { $('requestPanel').style.height = '50%'; $('requestPanel').style.width = '50%'; saveLayout(); });
+}
+
+function saveLayout() {
+    lsSet('reqly.layout', {
+        sidebar: $('sidebar').offsetWidth || lsGet('reqly.layout', {}).sidebar,
+        split: parseFloat($('requestPanel').style.height) || 50,
+        splitX: parseFloat($('requestPanel').style.width) || 50,
+        side: $('panels').classList.contains('side'),
+        sidebarHidden: document.body.classList.contains('sidebar-hidden'),
+    });
+}
+
+function toggleSidebar() {
+    document.body.classList.toggle('sidebar-hidden');
+    updateLayoutButtons();
+    saveLayout();
+}
+
+function toggleLayout() {
+    $('panels').classList.toggle('side');
+    updateLayoutButtons();
+    saveLayout();
+}
+
+function updateLayoutButtons() {
+    const hidden = document.body.classList.contains('sidebar-hidden');
+    const side = $('panels').classList.contains('side');
+    $('sidebarToggle').removeAttribute('title');
+    $('sidebarToggle').dataset.tip = hidden ? 'Show sidebar' : 'Hide sidebar';
+    $('sidebarToggle').classList.toggle('active', hidden);
+    const lt = $('layoutToggle');
+    lt.removeAttribute('title');
+    lt.dataset.tip = side ? 'Response below the request' : 'Response beside the request';
+    lt.querySelector('use').setAttribute('href', side ? '#i-rows' : '#i-columns');
 }
 
 // ============================================================
@@ -2645,6 +2749,7 @@ function initEvents() {
         else if (e.altKey && e.code === 'KeyT') { e.preventDefault(); newTab(); }
         else if (e.altKey && e.code === 'KeyW') { e.preventDefault(); closeTab(state.activeTabId); }
         else if (e.key === '?' && !e.target.matches('input, textarea, select, [contenteditable]')) { e.preventDefault(); showShortcuts(); }
+        else if (mod && e.key.toLowerCase() === 'b') { e.preventDefault(); toggleSidebar(); }
     });
     window.addEventListener('beforeunload', () => persistTabs.flush());
 }
@@ -2717,7 +2822,7 @@ function varTipHtml(text) {
 /** Variables used by the request that the active environment doesn't define. */
 function undefinedVars(dto) {
     const vars = currentEnvVars();
-    const texts = [dto.url, dto.body, ...Object.keys(dto.params || {}), ...Object.values(dto.params || {}), ...Object.keys(dto.headers || {}), ...Object.values(dto.headers || {}), ...Object.values(dto.authConfig || {})];
+    const texts = [dto.url, dto.body, ...queryRows(dto).flatMap(r => [r.key, r.value]), ...Object.keys(dto.headers || {}), ...Object.values(dto.headers || {}), ...Object.values(dto.authConfig || {})];
     return [...new Set(texts.flatMap(varsIn))].filter(n => !Object.prototype.hasOwnProperty.call(vars, n));
 }
 
@@ -2831,8 +2936,9 @@ function paletteSources() {
         ['Export everything (backup)', '', 'download', () => { location.href = '/api/export/all'; }],
         ['Manage environments', '', 'settings', () => openEnvModal()],
         ['Switch theme', '', 'theme', () => toggleTheme()],
-        ['Toggle sidebar', MOD + 'B', 'collection', () => toggleSidebar?.()],
-        ['Toggle side-by-side layout', '', 'collection', () => toggleLayout?.()],
+        ['Toggle sidebar', MOD + 'B', 'sidebar', () => toggleSidebar()],
+        ['Toggle side-by-side layout', '', 'columns', () => toggleLayout()],
+        ['Toggle sound effects (sci-fi)', '', 'sound-on', () => toggleSound()],
         ['Keyboard shortcuts', '?', 'keyboard', () => showShortcuts()],
         ['Show history', '', 'history', () => switchSidebar('history')],
     ];
@@ -2989,6 +3095,49 @@ function ripple(ev) {
     setTimeout(() => r.remove(), 650);
 }
 
+// Synthesised blips (no audio files); sci-fi theme only, off until the user turns them on
+let soundOn = lsGet('reqly.sound', false), audioCtx = null;
+function toggleSound() {
+    soundOn = !soundOn;
+    lsSet('reqly.sound', soundOn);
+    updateSoundButton();
+    if (soundOn) playSound('ok');
+}
+function updateSoundButton() {
+    const b = $('soundBtn');
+    b.removeAttribute('title');
+    b.dataset.tip = soundOn ? 'Sound effects: on' : 'Sound effects: off';
+    b.classList.toggle('active', soundOn);
+    b.querySelector('use').setAttribute('href', soundOn ? '#i-sound-on' : '#i-sound-off');
+}
+function playSound(kind) {
+    if (!soundOn || !isScifi()) return;
+    try {
+        audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+        const t = audioCtx.currentTime;
+        const tone = (f, start, dur, type = 'sine', vol = 0.05, f2 = null) => {
+            const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+            o.type = type;
+            o.frequency.setValueAtTime(f, t + start);
+            if (f2) o.frequency.exponentialRampToValueAtTime(f2, t + start + dur);
+            g.gain.setValueAtTime(0.0001, t + start);
+            g.gain.exponentialRampToValueAtTime(vol, t + start + 0.012);
+            g.gain.exponentialRampToValueAtTime(0.0001, t + start + dur);
+            o.connect(g).connect(audioCtx.destination);
+            o.start(t + start);
+            o.stop(t + start + dur + 0.03);
+        };
+        ({
+            send: () => tone(380, 0, 0.14, 'square', 0.025, 1100),
+            ok: () => { tone(660, 0, 0.09); tone(990, 0.08, 0.16); },
+            err: () => tone(190, 0, 0.3, 'sawtooth', 0.035, 80),
+            win: () => [523, 659, 784, 1047].forEach((f, i) => tone(f, i * 0.09, 0.18, 'triangle', 0.05)),
+            fail: () => { tone(320, 0, 0.18, 'sawtooth', 0.035, 160); tone(210, 0.16, 0.32, 'sawtooth', 0.035, 90); },
+            achieve: () => [784, 988, 1175, 1568].forEach((f, i) => tone(f, i * 0.07, 0.22, 'triangle', 0.045)),
+        })[kind]?.();
+    } catch (e) { /* audio unavailable */ }
+}
+
 const hud = lsGet('reqly.hud', { tx: 0, ok: 0 });
 function recordTelemetry(success) {
     hud.tx++;
@@ -3022,7 +3171,7 @@ function bootSequence() {
 }
 
 function showShortcuts() {
-    const rows = [[MOD + 'K', 'Search & jump to anything'], [MOD + '↵', 'Send request'], [MOD + 'S', 'Save request'], ['Enter', 'Send (in the URL bar)'], ['⌥T', 'New tab'], ['⌥W', 'Close tab'], ['Esc', 'Close dialog / menu'], ['?', 'Show this list'],
+    const rows = [[MOD + 'K', 'Search & jump to anything'], [MOD + '↵', 'Send request'], [MOD + 'S', 'Save request'], [MOD + 'F', 'Find in response'], [MOD + 'B', 'Show / hide sidebar'], ['Enter', 'Send (in the URL bar)'], ['⌥T', 'New tab'], ['⌥W', 'Close tab'], ['Esc', 'Close dialog / menu'], ['?', 'Show this list'],
         ['Double-click', 'Rename an item in the sidebar'], ['Right-click', 'Item and tab menus'], ['Middle-click', 'Close a tab'], ['Paste cURL', 'Into the URL bar to import it']];
     uiDialog({
         title: 'Keyboard shortcuts', okText: 'Close', alertOnly: true,
@@ -3103,6 +3252,7 @@ async function init() {
     ['setTimeout', 'setInsecure', 'setRedirects'].forEach(id => $(id).addEventListener('change', () => { markDirty(); updateIndicators(); }));
     ['gqlQuery', 'gqlVars'].forEach(id => $(id).addEventListener('input', () => { markDirty(); updateIndicators(); }));
     updateThemeButton();
+    updateSoundButton();
     renderHud();
     bootSequence();
     $('sendBtn').addEventListener('click', ripple);

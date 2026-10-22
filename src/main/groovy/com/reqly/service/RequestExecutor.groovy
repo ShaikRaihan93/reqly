@@ -192,9 +192,13 @@ class RequestExecutor {
     // Variables are substituted before encoding; afterwards "{{x}}" would already be "%7B%7Bx%7D%7D"
     private String buildUrl(RequestDto request, Map<String, String> variables) {
         def url = request.url
-        if (request.params) {
+        // paramRows keeps order and repeated keys (?id=1&id=2); params is the older map form
+        def pairs = request.paramRows != null
+                ? request.paramRows.findAll { it.enabled != false && it.key }.collect { [it.key as String, (it.value ?: "") as String] }
+                : (request.params ?: [:]).collect { k, v -> [k, v] }
+        if (pairs) {
             def enc = { String s -> URLEncoder.encode(substituteVariables(s ?: "", variables), StandardCharsets.UTF_8) }
-            def queryString = request.params.collect { k, v -> "${enc(k)}=${enc(v)}" }.join("&")
+            def queryString = pairs.collect { kv -> "${enc(kv[0])}=${enc(kv[1])}" }.join("&")
             url += (url.contains("?") ? "&" : "?") + queryString
         }
         url

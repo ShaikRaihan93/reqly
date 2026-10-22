@@ -9,6 +9,8 @@ class RequestDto {
     Map<String, String> params
     Map<String, String> disabledHeaders
     Map<String, String> disabledParams
+    /** All query rows in order, duplicates allowed: [{key, value, enabled}]. Takes precedence over params. */
+    List<Map<String, Object>> paramRows
     String body
     String bodyType
     String authType
