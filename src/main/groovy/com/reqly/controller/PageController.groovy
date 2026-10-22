@@ -25,6 +25,9 @@ class PageController {
         auth.userForToken(SecurityFilter.cookie(req)) ? "redirect:/" : "login"
     }
 
+    @GetMapping("/admin")
+    String admin() { "admin" }
+
     @GetMapping("/privacy")
     String privacy() { "privacy" }
 

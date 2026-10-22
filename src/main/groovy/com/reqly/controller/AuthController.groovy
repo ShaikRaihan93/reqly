@@ -92,6 +92,6 @@ class AuthController {
     }
 
     private static Map<String, Object> userJson(AppUser u) {
-        [id: u.id, name: u.name, email: u.email, createdAt: u.createdAt?.toString()] as Map<String, Object>
+        [id: u.id, name: u.name, email: u.email, admin: u.admin == true, createdAt: u.createdAt?.toString()] as Map<String, Object>
     }
 }

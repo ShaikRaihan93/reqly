@@ -25,7 +25,7 @@ Data is stored in `~/reqly-data/` (embedded H2 database, encryption key, automat
 ### Build installers
 
 ```bash
-./gradlew test            # 29 unit + integration tests
+./gradlew test            # 34 unit + integration tests
 ./gradlew packageMacApp   # build/dist/Reqly.app
 ./gradlew packageMac      # build/dist/Reqly-1.0.0.dmg
 ./gradlew packageMac -PmacSignIdentity="Developer ID Application: Your Name (TEAMID)"   # signed
@@ -33,6 +33,25 @@ Data is stored in `~/reqly-data/` (embedded H2 database, encryption key, automat
 
 Unsigned builds show an "unidentified developer" warning on other Macs. To distribute, sign with an Apple
 Developer ID and notarise the DMG (`xcrun notarytool submit … --wait`, then `xcrun stapler staple`).
+
+## Admin dashboard & database access
+
+Admins (the first account on a machine, plus anyone they promote) get **Admin dashboard** in the account
+menu, at `/admin`:
+
+- **Overview**: row counts, database file and size, schema version (Flyway), server info, latest backups
+- **Users**: everyone's workspace size and sessions; make/remove admin, sign out everywhere, reset password
+  (temporary password shown once), delete an account with its data
+- **Tables**: browse every table with search, sorting, paging, CSV export and a row detail panel
+- **SQL console**: read-only (one SELECT/WITH/EXPLAIN/SHOW statement, 1,000 rows, 10 s timeout; writes and
+  H2 file functions are rejected)
+- **Backups**: back up now, download any backup
+
+Password hashes, session tokens and encrypted values are always shown masked.
+
+To open the database in an external tool (DataGrip, DBeaver, the H2 console), quit Reqly first (the file
+is locked while it runs) or open a copy from `~/reqly-data/backups`:
+JDBC URL `jdbc:h2:file:~/reqly-data/reqly`, user `sa`, empty password. Encrypted columns read as `enc:v1:…`.
 
 ## Security & privacy
 
@@ -42,7 +61,8 @@ Developer ID and notarise the DMG (`xcrun notarytool submit … --wait`, then `x
   sign-in throttling. Forgot your password? Start Reqly with `--reqly.reset-password=you@example.com`
   to get a temporary one printed to the console.
 - Environment variables, auth settings and headers are encrypted at rest (AES-256-GCM) with a key in
-  `~/reqly-data/reqly.key`. Credentials are masked in the server log.
+  `~/reqly-data/reqly.key`; older plaintext values are encrypted at startup, and the database is compacted
+  on shutdown so superseded copies don't linger in the file. Credentials are masked in the server log.
 - Pre-request and post-response scripts run in a sandboxed frame without access to the app, cookies or API.
 - No telemetry, analytics or third-party requests; fonts are bundled.
 - The database is backed up to `~/reqly-data/backups` on every start (last 10), before any migration.

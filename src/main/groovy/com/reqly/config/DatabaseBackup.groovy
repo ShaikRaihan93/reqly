@@ -48,19 +48,29 @@ class DatabaseBackup {
         if (done) return
         done = true
         try {
-            dataSource.connection.withCloseable { conn ->
-                if (conn.metaData.databaseProductName != "H2") return
-                def dataDir = System.getProperty("reqly.data-dir") ?: Paths.get(System.getProperty("user.home"), "reqly-data").toString()
-                Path dir = Paths.get(dataDir, "backups")
-                Files.createDirectories(dir)
-                def file = dir.resolve("reqly-${LocalDateTime.now().format(DateTimeFormatter.ofPattern('yyyyMMdd-HHmmss'))}.zip")
-                conn.createStatement().withCloseable { it.execute("BACKUP TO '${file.toString().replace("'", "''")}'") }
-                def old = Files.list(dir).withCloseable { s -> s.filter { it.fileName.toString() ==~ /reqly-.*\.zip/ }.sorted().toList() }
-                if (old.size() > KEEP) old.take(old.size() - KEEP).each { Files.deleteIfExists(it) }
-                log.info("Database backed up to {}", file)
-            }
+            backupNow()
         } catch (Exception e) {
             log.warn("Database backup skipped: {}", e.message)
+        }
+    }
+
+    static Path backupDir() {
+        def dataDir = System.getProperty("reqly.data-dir") ?: Paths.get(System.getProperty("user.home"), "reqly-data").toString()
+        Paths.get(dataDir, "backups")
+    }
+
+    /** Online backup to a timestamped zip; returns null for non-H2 databases. Keeps the newest {@link #KEEP}. */
+    synchronized Path backupNow() {
+        dataSource.connection.withCloseable { conn ->
+            if (conn.metaData.databaseProductName != "H2") return null
+            Path dir = backupDir()
+            Files.createDirectories(dir)
+            def file = dir.resolve("reqly-${LocalDateTime.now().format(DateTimeFormatter.ofPattern('yyyyMMdd-HHmmss'))}.zip")
+            conn.createStatement().withCloseable { it.execute("BACKUP TO '${file.toString().replace("'", "''")}'") }
+            def old = Files.list(dir).withCloseable { s -> s.filter { it.fileName.toString() ==~ /reqly-.*\.zip/ }.sorted().toList() }
+            if (old.size() > KEEP) old.take(old.size() - KEEP).each { Files.deleteIfExists(it) }
+            log.info("Database backed up to {}", file)
+            file
         }
     }
 }

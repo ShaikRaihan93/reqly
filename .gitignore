@@ -1,16 +1,40 @@
-# Build output
+# --- Build output ---
 build/
-.gradle/
 out/
+.gradle/
+*.class
 
-# IDE
+# --- Installers / packaged apps (built by ./gradlew packageMac) ---
+*.dmg
+*.pkg
+*.msi
+*.app/
+
+# --- IDEs and editors ---
 .idea/
 *.iml
+*.ipr
+*.iws
 .vscode/
+*.swp
+*~
 
-# OS
+# --- OS clutter ---
 .DS_Store
+Thumbs.db
 
-# Local data never belongs in git (it lives in ~/reqly-data anyway)
+# --- Local data, logs and secrets (Reqly keeps real data in ~/reqly-data, never in the repo) ---
 *.mv.db
 *.trace.db
+*.lock.db
+*.log
+logs/
+reqly.key
+*.key
+*.pem
+.env
+.env.*
+application-local.properties
+
+# --- Personal Claude Code settings (shared settings stay in .claude/) ---
+.claude/settings.local.json

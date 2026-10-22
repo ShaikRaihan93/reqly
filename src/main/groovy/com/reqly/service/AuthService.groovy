@@ -53,7 +53,7 @@ class AuthService {
         validatePassword(password)
         if (users.findByEmailIgnoreCase(email).isPresent()) throw new IllegalArgumentException("An account with this email already exists")
         boolean first = !hasUsers()
-        def user = users.save(new AppUser(name: name, email: email, passwordHash: encoder.encode(password)))
+        def user = users.save(new AppUser(name: name, email: email, passwordHash: encoder.encode(password), admin: first))
         if (first) {
             collections.claimUnowned(user)
             requests.claimUnowned(user)

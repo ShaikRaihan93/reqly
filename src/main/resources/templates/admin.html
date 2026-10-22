@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin · Reqly</title>
+    <link rel="icon" href="/favicon.ico" sizes="any">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/css/fonts.css">
+    <link rel="stylesheet" href="/css/app.css">
+    <link rel="stylesheet" href="/css/scifi.css">
+    <link rel="stylesheet" href="/css/admin.css">
+    <script>
+        try {
+            var t = JSON.parse(localStorage.getItem('reqly.uiTheme') || 'null');
+            document.documentElement.dataset.theme = ['scifi', 'dark', 'light'].indexOf(t) >= 0 ? t : 'scifi';
+        } catch (e) { document.documentElement.dataset.theme = 'scifi'; }
+    </script>
+</head>
+<body class="admin-page">
+<header class="header">
+    <div class="logo"><img src="/favicon.svg" alt="">Reqly <span class="admin-tag">Admin</span></div>
+    <div class="header-actions">
+        <span class="hint" id="adminWho"></span>
+        <a class="btn btn-ghost" href="/" title="Back to your workspace">← Back to Reqly</a>
+    </div>
+</header>
+
+<div class="admin">
+    <nav class="admin-nav" aria-label="Admin sections">
+        <a href="#overview" data-view="overview"><span class="nav-ico">◎</span>Overview</a>
+        <a href="#users" data-view="users"><span class="nav-ico">☺</span>Users</a>
+        <a href="#tables" data-view="tables"><span class="nav-ico">▦</span>Tables</a>
+        <div class="nav-tables" id="navTables"></div>
+        <a href="#sql" data-view="sql"><span class="nav-ico">❯</span>SQL console</a>
+        <a href="#backups" data-view="backups"><span class="nav-ico">⛁</span>Backups</a>
+        <div class="nav-foot hint">Hashes, tokens and encrypted secrets are always masked.</div>
+    </nav>
+    <main class="admin-main" id="adminMain" tabindex="-1"></main>
+</div>
+
+<aside class="drawer" id="rowDrawer" aria-label="Row details">
+    <div class="drawer-head"><b id="drawerTitle">Row</b><button class="icon-btn" id="drawerClose" aria-label="Close">✕</button></div>
+    <div class="drawer-body" id="drawerBody"></div>
+</aside>
+
+<div class="modal-overlay" id="adminDialog" role="dialog" aria-modal="true" aria-labelledby="adminDialogTitle">
+    <div class="modal">
+        <div class="modal-head"><h3 id="adminDialogTitle"></h3></div>
+        <div class="modal-body" id="adminDialogBody"></div>
+        <div class="modal-foot"><button class="btn" id="adminDialogCancel">Cancel</button><button class="btn btn-primary" id="adminDialogOk">OK</button></div>
+    </div>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script src="/js/admin.js"></script>
+</body>
+</html>

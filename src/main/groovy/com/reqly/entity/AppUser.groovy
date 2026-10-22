@@ -28,4 +28,8 @@ class AppUser {
 
     @Column(name = "last_login_at")
     LocalDateTime lastLoginAt
+
+    /** Can open the admin dashboard (/admin). The first account on a machine is an admin. */
+    @Column(nullable = false)
+    Boolean admin = false
 }

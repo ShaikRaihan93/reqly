@@ -45,6 +45,17 @@ class SecurityFilter extends OncePerRequestFilter {
         def path = req.requestURI
         def user = auth.userForToken(cookie(req))
         if (user != null) req.setAttribute(CurrentUser.ATTRIBUTE, user)
+        // The admin dashboard and its API are for admins only
+        if (user != null && (path == "/admin" || path.startsWith("/admin/") || path.startsWith("/api/admin/")) && user.admin != true) {
+            if (path.startsWith("/api/")) {
+                res.status = 403
+                res.contentType = "application/json"
+                res.writer.write('{"error":"Admins only"}')
+            } else {
+                res.sendRedirect("/")
+            }
+            return
+        }
         if (user == null && !PUBLIC_PREFIXES.any { path == it || path.startsWith(it) }) {
             if (path.startsWith("/api/")) {
                 res.status = 401

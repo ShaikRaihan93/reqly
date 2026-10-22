@@ -2999,6 +2999,7 @@ function openAccountMenu(ev) {
         { label: `${u.name || ''} · ${u.email || ''}`, action: () => openAccountSettings() },
         '-',
         { label: 'Account settings…', icon: 'settings', action: () => openAccountSettings() },
+        ...(u.admin ? [{ label: 'Admin dashboard', icon: 'list', action: () => window.open('/admin', '_blank') }] : []),
         { label: 'About Reqly', icon: 'file', action: () => openAbout() },
         { label: 'Privacy Policy', action: () => window.open('/privacy', '_blank') },
         { label: 'Terms of Use', action: () => window.open('/terms', '_blank') },

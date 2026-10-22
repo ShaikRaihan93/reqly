@@ -1,0 +1,88 @@
+/* Admin dashboard layout (theme variables come from app.css / scifi.css) */
+body.admin-page { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+.admin-tag { font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 4px; background: var(--red); color: var(--bg-primary); margin-left: 6px; letter-spacing: .5px; }
+.header .btn { text-decoration: none; }
+.admin { flex: 1; display: flex; min-height: 0; }
+.admin-nav { width: 230px; flex-shrink: 0; background: var(--bg-secondary); border-right: 1px solid var(--border); padding: 12px 8px; display: flex; flex-direction: column; gap: 2px; overflow-y: auto; }
+.admin-nav > a { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: var(--radius-sm); color: var(--text-secondary); text-decoration: none; font-weight: 600; }
+.admin-nav > a:hover { background: var(--bg-hover); color: var(--text-primary); }
+.admin-nav > a.active { background: var(--bg-tertiary); color: var(--accent); }
+.nav-ico { width: 18px; text-align: center; opacity: .8; }
+.nav-tables { display: flex; flex-direction: column; margin: 0 0 6px 18px; border-left: 1px solid var(--border); }
+.nav-tables a { display: flex; justify-content: space-between; gap: 8px; padding: 4px 10px; font-size: 12px; font-family: var(--mono); color: var(--text-muted); text-decoration: none; border-radius: 0 4px 4px 0; }
+.nav-tables a:hover { color: var(--text-primary); background: var(--bg-hover); }
+.nav-tables a.active { color: var(--accent); background: var(--bg-tertiary); }
+.nav-tables a span:last-child { opacity: .7; }
+.nav-foot { margin-top: auto; padding: 10px; line-height: 1.5; }
+.admin-main { flex: 1; overflow: auto; padding: 22px 26px 40px; min-width: 0; outline: none; }
+.view-head { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
+.view-head h1 { font-size: 20px; margin-right: auto; }
+.view-head h1 small { font-size: 12px; color: var(--text-muted); font-weight: 500; margin-left: 8px; font-family: var(--mono); }
+
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-bottom: 18px; }
+.stat { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; }
+.stat .k { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .6px; }
+.stat .v { font-size: 26px; font-weight: 800; margin-top: 4px; }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px; margin-bottom: 18px; }
+.card { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; min-width: 0; }
+.card h2 { font-size: 13px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+.kv { display: grid; grid-template-columns: 130px 1fr; gap: 6px 12px; font-size: 12.5px; }
+.kv span:nth-child(odd) { color: var(--text-muted); }
+.kv span:nth-child(even) { font-family: var(--mono); word-break: break-all; }
+
+.grid-wrap { border: 1px solid var(--border); border-radius: var(--radius); overflow: auto; max-height: calc(100vh - 230px); background: var(--bg-secondary); }
+table.grid { border-collapse: separate; border-spacing: 0; width: 100%; font-size: 12.5px; }
+table.grid th { position: sticky; top: 0; z-index: 1; background: var(--bg-tertiary); text-align: left; padding: 8px 10px; font-weight: 600; white-space: nowrap; border-bottom: 1px solid var(--border-strong); cursor: pointer; user-select: none; }
+table.grid th small { display: block; font-weight: 400; font-size: 10px; color: var(--text-muted); font-family: var(--mono); text-transform: lowercase; }
+table.grid th.sorted::after { content: ' ▴'; color: var(--accent); }
+table.grid th.sorted.desc::after { content: ' ▾'; }
+table.grid td { padding: 6px 10px; border-bottom: 1px solid var(--border); font-family: var(--mono); max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: top; }
+table.grid tbody tr { cursor: pointer; }
+table.grid tbody tr:hover td { background: var(--bg-hover); }
+td .null { color: var(--text-muted); font-style: italic; }
+.masked { display: inline-block; font-family: var(--hud, inherit); font-size: 11px; padding: 1px 6px; border-radius: 4px; background: color-mix(in srgb, var(--yellow) 16%, transparent); color: var(--yellow); }
+.bool-t { color: var(--green); } .bool-f { color: var(--text-muted); }
+.pager { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 12px; color: var(--text-muted); }
+.pager .spacer { flex: 1; }
+.search-input { width: 260px; }
+
+.users-table td { white-space: normal; font-family: inherit; max-width: none; }
+.users-table tbody tr { cursor: default; }
+.badge { display: inline-block; font-size: 10.5px; font-weight: 700; padding: 1px 7px; border-radius: 10px; background: var(--bg-tertiary); color: var(--text-secondary); margin-left: 6px; }
+.badge.admin { background: color-mix(in srgb, var(--red) 18%, transparent); color: var(--red); }
+.badge.you { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); }
+.row-actions-inline { display: flex; gap: 6px; flex-wrap: wrap; }
+
+.sql-editor { width: 100%; min-height: 140px; font-family: var(--mono); font-size: 13px; }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; margin: 10px 0 14px; }
+.chip { font-size: 11.5px; font-family: var(--mono); padding: 4px 9px; border-radius: 12px; border: 1px solid var(--border-strong); background: none; color: var(--text-secondary); cursor: pointer; }
+.chip:hover { border-color: var(--accent); color: var(--accent); }
+.sql-meta { font-size: 12px; color: var(--text-muted); margin: 12px 0 8px; display: flex; gap: 12px; }
+
+.drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(520px, 92vw); background: var(--bg-secondary); border-left: 1px solid var(--border-strong); box-shadow: var(--shadow); transform: translateX(100%); transition: transform .2s ease; z-index: 90; display: flex; flex-direction: column; }
+.drawer.open { transform: none; }
+.drawer-head { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+.drawer-body { overflow: auto; padding: 12px 16px; display: flex; flex-direction: column; gap: 12px; }
+.field-row .fk { font-size: 11px; color: var(--text-muted); font-family: var(--mono); margin-bottom: 4px; }
+.field-row pre { font-family: var(--mono); font-size: 12px; white-space: pre-wrap; word-break: break-word; background: var(--bg-primary); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 10px; max-height: 320px; overflow: auto; }
+.temp-pw { font-family: var(--mono); font-size: 18px; letter-spacing: 1px; padding: 10px 12px; background: var(--bg-primary); border: 1px dashed var(--accent); border-radius: var(--radius-sm); text-align: center; user-select: all; }
+
+:root[data-theme="scifi"] .admin-nav { background: rgba(9, 16, 34, 0.82); }
+:root[data-theme="scifi"] .admin-nav > a { font-family: var(--hud); letter-spacing: 1.4px; text-transform: uppercase; font-size: 12px; }
+:root[data-theme="scifi"] .admin-nav > a.active { background: linear-gradient(90deg, rgba(0, 240, 255, 0.18), transparent); box-shadow: inset 2px 0 0 var(--accent); text-shadow: 0 0 8px rgba(0, 240, 255, 0.6); }
+:root[data-theme="scifi"] .admin-main { background: linear-gradient(180deg, rgba(5, 9, 20, 0.72), rgba(4, 7, 16, 0.6)); }
+:root[data-theme="scifi"] .view-head h1 { font-family: var(--display); letter-spacing: 2px; text-transform: uppercase; font-size: 18px; color: #eaffff; text-shadow: 0 0 14px rgba(0, 240, 255, 0.35); }
+:root[data-theme="scifi"] .stat, :root[data-theme="scifi"] .card, :root[data-theme="scifi"] .grid-wrap { background: rgba(6, 14, 30, 0.75); border-color: var(--border-strong); box-shadow: inset 0 0 24px rgba(0, 240, 255, 0.04); }
+:root[data-theme="scifi"] .stat .v { font-family: var(--display); color: var(--accent); text-shadow: 0 0 12px rgba(0, 240, 255, 0.55); }
+:root[data-theme="scifi"] table.grid th { background: rgba(0, 240, 255, 0.08); font-family: var(--hud); letter-spacing: 1px; text-transform: uppercase; font-size: 11.5px; color: var(--accent); }
+:root[data-theme="scifi"] .admin-tag { background: var(--magenta); color: #fff; box-shadow: 0 0 10px var(--magenta); font-family: var(--display); }
+:root[data-theme="scifi"] .drawer { background: rgba(6, 14, 30, 0.97); border-left-color: var(--accent); }
+
+@media (max-width: 800px) {
+    .admin-nav { width: 64px; padding: 8px 4px; }
+    .admin-nav > a { font-size: 0; justify-content: center; }
+    .nav-ico { font-size: 16px; }
+    .nav-tables, .nav-foot { display: none; }
+    .admin-main { padding: 16px; }
+}
+.card { overflow-x: auto; }
