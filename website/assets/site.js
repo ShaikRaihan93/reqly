@@ -1,10 +1,10 @@
 // Reqly website: shared header/footer, small interactions, and the settings you will want to change.
 const SITE = {
-    version: '1.0.0',               // released version, not the in-development one (see gradle.properties)
+    version: '1.1.0',               // fallback; replaced by the latest GitHub release's version when the page loads
     released: 'October 2026',
     github: 'https://github.com/ShaikRaihan93/reqly',
-    // The released version shown on the site. Update it after publishing release v<version> with Reqly-<version>.dmg
-    get macDownload() { return `${this.github}/releases/download/v${this.version}/Reqly-${this.version}.dmg`; },
+    // Always the newest release: every release attaches its installer as Reqly.dmg, so this link never changes
+    get macDownload() { return `${this.github}/releases/latest/download/Reqly.dmg`; },
     releases: 'https://github.com/ShaikRaihan93/reqly/releases',
     email: 'hello@reqly.app',        // TODO: replace with the inbox you want people to write to
     owner: 'Shaik Raihan',
@@ -67,7 +67,7 @@ function renderFooter() {
             <li><a href="privacy.html">Privacy Policy</a></li><li><a href="terms.html">Terms &amp; Conditions</a></li>
             <li><a href="${SITE.github}/blob/main/THIRD_PARTY_NOTICES.md" rel="noopener">Open-source licenses</a></li></ul></div>
         </div>
-        <div class="legal-bar"><span>© ${new Date().getFullYear()} ${SITE.owner}. All rights reserved.</span><span>Reqly v${SITE.version} · Made for people who test APIs</span></div>
+        <div class="legal-bar"><span>© ${new Date().getFullYear()} ${SITE.owner}. All rights reserved.</span><span><span data-site-footer-version>Reqly v${SITE.version}</span> · Made for people who test APIs</span></div>
       </div>
     </footer>`;
 }
@@ -143,9 +143,25 @@ function initContactForm() {
     });
 }
 
+/** Shows the version of the newest release, so publishing a release is all it takes to update the site. */
+async function loadLatestVersion() {
+    try {
+        const r = await fetch('https://api.github.com/repos/ShaikRaihan93/reqly/releases/latest', { headers: { Accept: 'application/vnd.github+json' } });
+        if (!r.ok) return;
+        const rel = await r.json();
+        const v = String(rel.tag_name || '').replace(/^v/, '');
+        if (!/^\d+\.\d+\.\d+$/.test(v)) return;
+        SITE.version = v;
+        if (rel.published_at) SITE.released = new Date(rel.published_at).toLocaleDateString('en', { month: 'long', year: 'numeric' });
+        document.querySelectorAll('[data-site="version"], [data-site="released"]').forEach(el => { el.textContent = SITE[el.dataset.site]; });
+        document.querySelectorAll('[data-site-footer-version]').forEach(el => { el.textContent = `Reqly v${v}`; });
+    } catch (e) { /* offline or rate-limited: keep the built-in values */ }
+}
+
 renderHeader();
 renderFooter();
 fillSiteValues();
+loadLatestVersion();
 initReveal();
 initTabs();
 initPricing();
